@@ -1,0 +1,11 @@
+{
+  "name": "berry",
+  "description": "The review agent for scientific papers from Berry Science: find objective errors in a paper's LaTeX source and write a scored JSON review",
+  "version": "0.1.0",
+  "author": {
+    "name": "Berry Science"
+  },
+  "homepage": "https://berry.science",
+  "repository": "https://github.com/berry-science/agent-skills",
+  "license": "MIT"
+}

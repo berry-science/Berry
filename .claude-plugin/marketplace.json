@@ -1,0 +1,14 @@
+{
+  "name": "berry-science",
+  "description": "Agent skills from Berry Science for checking scientific results",
+  "owner": {
+    "name": "Berry Science"
+  },
+  "plugins": [
+    {
+      "name": "berry",
+      "source": "./",
+      "description": "The review agent for scientific papers: find objective errors in a paper's LaTeX source and write a scored JSON review"
+    }
+  ]
+}
