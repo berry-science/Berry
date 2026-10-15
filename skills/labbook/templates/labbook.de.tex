@@ -1,0 +1,76 @@
+% Das Laborbuch: die logischen Schritte dieses Projekts, für Leserinnen und
+% Leser — Kolleg:innen, Kooperationspartner:innen, man selbst in sechs Monaten. Vom Agenten
+% in der Sprache der Forscherin / des Forschers geschrieben (labbook/voice.md),
+% ein \section pro Schritt.
+%
+% Kästen, Abbildungen und Tabellen kommen aus dem Claim-Ledger über
+% claims.gen.tex (`labbook.py gen`). Den Text eines Claims nie hierher
+% kopieren: \claimbox{<id>} zeigt ihn genau so, wie das Ledger ihn hat.
+\documentclass[11pt,a4paper]{article}
+\usepackage[ngerman]{babel}
+\usepackage{berry-labbook}
+\renewcommand{\berryHoldsWhen}{Gilt, wenn}
+\renewcommand{\berryConventions}{Konventionen}
+\renewcommand{\berryRestsOn}{Beruht auf}
+\renewcommand{\berryClaim}{Claim}
+\renewcommand{\berryDraft}{Entwurf — noch nicht abgestimmt}
+\renewcommand{\berrySealed}{versiegelt}
+\renewcommand{\berryInLibrary}{in der Library}
+\renewcommand{\berryFigureMissing}{Abbildung nicht erzeugt}
+\renewcommand{\berryMissingClaim}{Kein Claim mit dieser Id im Ledger}
+\renewcommand{\berryPaperReview}{Paper geprüft}
+\renewcommand{\berryVerdictholds}{stimmt}
+\renewcommand{\berryVerdictholdswithcorrection}{stimmt mit Korrektur}
+\renewcommand{\berryVerdictfails}{falsch — nicht verwendet}
+\renewcommand{\berryVerdictcouldnotcheck}{nicht prüfbar}
+\renewcommand{\berryEvidence}{Evidenz}
+\renewcommand{\berryRelcites}{zitiert}
+\renewcommand{\berryReluses}{verwendet}
+\renewcommand{\berryRelextends}{erweitert}
+\renewcommand{\berryRelreplicates}{repliziert}
+\renewcommand{\berryRelrefutes}{widerlegt}
+\renewcommand{\berryTyperesult}{Ergebnis}
+\renewcommand{\berryTypemethod}{Methode}
+\renewcommand{\berryTypenegativeresult}{negatives Ergebnis}
+\renewcommand{\berryTypecalibration}{Kalibrierung}
+\input{claims.gen.tex}
+
+\title{@TITLE@}
+\author{@AUTHOR@}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Stand}
+% Drei, vier Sätze: die Frage, was bisher gesichert ist, was offen ist.
+% Wird neu geschrieben, wenn das Projekt weitergeht.
+
+\berryoverview
+
+% --- die Schritte --------------------------------------------------------------
+%
+% \section{<was dieser Schritt ergeben hat, in wenigen Worten>}
+% Warum dieser Schritt: die Frage, und warum sie als nächste kam.
+% Was gemacht wurde: die Methode in einfachen Worten; was festgehalten wurde.
+% \claimbox{<Claim-Id>}
+% \claimfigures{<Claim-Id>}
+% Was das für den nächsten Schritt heißt. Geprüfte Paper: \sourcebox{<sources/…json>}
+
+% --- Ende ----------------------------------------------------------------------
+
+\section*{Offene Punkte und Folgefragen}
+\begin{itemize}
+  \item % Was nicht geklärt ist, was als Nächstes zu versuchen ist, was zu fragen ist.
+\end{itemize}
+
+% \section*{Notizen}
+% Nur, was die Forscherin oder der Forscher über die Claims hinaus
+% festgehalten haben will: Kontext, Entscheidungen, Anmerkungen. Nie anstelle
+% eines Claims. Zum Verwenden das % entfernen.
+
+\appendix
+\section{Konventionen}
+\berryconventions
+
+\end{document}

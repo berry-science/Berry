@@ -1,0 +1,56 @@
+{
+  "backend": "sympy",
+  "backend_version": "1.14.0",
+  "expr": "Mul(Symbol('w0', positive=True), Add(Mul(Rational(1, 2), Pow(pi, Integer(-2)), Pow(Symbol('lam', positive=True), Integer(2)), Pow(Symbol('w0', positive=True), Integer(-4)), Pow(Symbol('z', positive=True), Integer(2))), Integer(1)))",
+  "format_version": 0,
+  "helper": "0.1.0",
+  "latex": "w_0 \\left(\\frac{\\lambda^{2} z^{2}}{2 \\pi^{2} w_0^{4}} + 1\\right)",
+  "path": {
+    "step:near-waist": "series-verified"
+  },
+  "regime": {
+    "order": "3",
+    "point": "0",
+    "small": [
+      "Mul(Pow(pi, Integer(-1)), Symbol('lam', positive=True), Pow(Symbol('w0', positive=True), Integer(-2)), Symbol('z', positive=True))"
+    ],
+    "small_latex": [
+      "\\frac{\\lambda z}{\\pi w_0^{2}}"
+    ]
+  },
+  "result": "w_near_waist",
+  "step": "step:near-waist",
+  "symbols": {
+    "lam": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": null,
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "\\lambda",
+      "name": "lam"
+    },
+    "w0": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": "beam-radius-1e2@1",
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "w_0",
+      "name": "w0"
+    },
+    "z": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": null,
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "z",
+      "name": "z"
+    }
+  },
+  "verdict": "series-verified"
+}

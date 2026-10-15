@@ -1,0 +1,191 @@
+% berry-labbook.sty — the look of a research labbook built from a claim ledger.
+%
+% Copied into labbook/ by `labbook.py init`; labbook.tex loads it. The claim
+% boxes, figures, source reviews and the conventions table are defined in
+% claims.gen.tex, which `labbook.py gen` writes from claims/ — never by hand.
+%
+% Compiled with LuaLaTeX, so claim text can carry any Unicode (µ, ², ∫, ħ)
+% exactly as the ledger has it.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{berry-labbook}[2026/10/12 Berry Science labbook]
+
+\RequirePackage{iftex}
+\RequireLuaTeX
+\RequirePackage{fontspec}
+\RequirePackage{unicode-math}
+% The Berry Science faces: Source Serif for what a
+% person reads, a sans for labels (Instrument Sans on the web; here IBM
+% Plex Sans, which TeX Live ships and the figures can use too), IBM Plex
+% Mono for ids. Each
+% falls back to Libertinus where a TeX installation lacks it.
+\setmathfont{Libertinus Math}
+% Symbols a text font lacks (∫, ≈, ⟨⟩ in a statement) come from the math font.
+\directlua{
+  luaotfload.add_fallback("berryfallback", {"Libertinus Math:mode=harf;"})
+}
+\IfFontExistsTF{Source Serif 4}
+  {\setmainfont{Source Serif 4}[RawFeature={fallback=berryfallback}]}
+  {\setmainfont{Libertinus Serif}[RawFeature={fallback=berryfallback}]}
+\IfFontExistsTF{IBM Plex Sans}
+  {\setsansfont{IBM Plex Sans}[Scale=MatchLowercase,RawFeature={fallback=berryfallback}]}
+  {\setsansfont{Libertinus Sans}}
+\IfFontExistsTF{IBM Plex Mono}
+  {\setmonofont{IBM Plex Mono}[Scale=MatchLowercase]}
+  {\setmonofont{Libertinus Mono}[Scale=MatchLowercase]}
+
+\RequirePackage[a4paper,margin=25mm]{geometry}
+\RequirePackage{graphicx}
+\RequirePackage{xcolor}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{booktabs}
+\RequirePackage{longtable}
+\RequirePackage{enumitem}
+\RequirePackage{xurl}
+\RequirePackage{hyperref}
+\RequirePackage{float}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6\baselineskip}
+
+% The Berry Science palette (light theme):
+% warm paper, cool ink; one accent, for links only; color for the two
+% states that are worth reading — corrected (teal) and wrong (red) — and
+% none for a paper that holds, which is the common case.
+\definecolor{berrypaper}{HTML}{FBFAF6}      % --background
+\definecolor{berryink}{HTML}{1A1E25}        % --foreground
+\definecolor{berrycard}{HTML}{FFFFFF}       % --card
+\definecolor{berrymutedbg}{HTML}{F4F3EE}    % --muted
+\definecolor{berrymuted}{HTML}{636972}      % --muted-foreground
+\definecolor{berryborder}{HTML}{E2E0D8}     % --border
+\definecolor{berryprimary}{HTML}{1268BA}    % --primary
+\definecolor{berrycorrected}{HTML}{0D7A66}  % --corrected
+\definecolor{berrywithdrawn}{HTML}{C02C29}  % --withdrawn
+\pagecolor{berrypaper}
+\AtBeginDocument{\color{berryink}}
+\hypersetup{colorlinks, linkcolor=berryprimary, urlcolor=berryprimary,
+  citecolor=berryprimary, filecolor=berryprimary}
+\renewcommand{\arraystretch}{1.15}
+
+% Words the boxes print. English by default; labbook.tex renews them in the
+% researcher's language (`labbook.py init --lang de` writes the German set).
+\newcommand{\berryHoldsWhen}{Holds when}
+\newcommand{\berryConventions}{Conventions}
+\newcommand{\berryRestsOn}{Rests on}
+\newcommand{\berryClaim}{Claim}
+\newcommand{\berryDraft}{draft — not yet agreed}
+\newcommand{\berrySealed}{sealed}
+\newcommand{\berryInLibrary}{in the Library}
+\newcommand{\berryFigureMissing}{Figure not rendered}
+\newcommand{\berryMissingClaim}{No claim with this id in the ledger}
+\newcommand{\berryPaperReview}{Paper checked}
+\newcommand{\berryVerdictholds}{holds}
+\newcommand{\berryVerdictholdswithcorrection}{holds with a correction}
+\newcommand{\berryVerdictfails}{wrong — not built on}
+\newcommand{\berryVerdictcouldnotcheck}{could not be checked}
+\newcommand{\berryEvidence}{evidence}
+\newcommand{\berryRelcites}{cites}
+\newcommand{\berryReluses}{uses}
+\newcommand{\berryRelextends}{extends}
+\newcommand{\berryRelreplicates}{replicates}
+\newcommand{\berryRelrefutes}{refutes}
+\newcommand{\berryTyperesult}{result}
+\newcommand{\berryTypemethod}{method}
+\newcommand{\berryTypenegativeresult}{negative result}
+\newcommand{\berryTypecalibration}{calibration}
+
+% --- claims -----------------------------------------------------------------
+% \berrydefclaim{id}{title}{statement}{holds when}{type}{status}{links}{conventions}{rests on}
+\newcommand{\berrydefclaim}[9]{%
+  \expandafter\long\expandafter\def\csname berry@claim@#1\endcsname{%
+    \berry@claimbox{#1}{#2}{#3}{#4}{#5}{#6}{#7}{#8}{#9}}}
+
+\newcommand{\berry@claimbox}[9]{%
+  \begin{tcolorbox}[enhanced,breakable,colback=berrycard,colframe=berryborder,
+      boxrule=0.5pt,arc=1.5pt,left=10pt,right=10pt,top=7pt,bottom=7pt,
+      colbacktitle=berrycard,coltitle=berryink,fonttitle=\bfseries\large,
+      titlerule=0.5pt,titlerule style=berryborder,toptitle=3pt,bottomtitle=2pt,
+      title={#2}]
+    \phantomsection\label{claim:#1}%
+    #3\par
+    \ifx\relax#4\relax\else
+      {\small\textcolor{berrymuted}{\sffamily\berryHoldsWhen:}\ #4}\par
+    \fi
+    \ifx\relax#8\relax\else
+      {\small\textcolor{berrymuted}{\sffamily\berryConventions:}\ #8}\par
+    \fi
+    \ifx\relax#9\relax\else
+      {\small\textcolor{berrymuted}{\sffamily\berryRestsOn:}\ #9}\par
+    \fi
+    {\footnotesize\sffamily\textcolor{berrymuted}{#5\ ·\ #6}\hfill #7}%
+  \end{tcolorbox}}
+
+% \claimbox{id}: the claim, as the ledger has it now.
+\newcommand{\claimbox}[1]{%
+  \ifcsname berry@claim@#1\endcsname
+    \csname berry@claim@#1\endcsname
+  \else
+    \berry@missing{\berryMissingClaim: \texttt{#1}}%
+  \fi}
+
+% \claimref{id}: a reference to a claim box elsewhere in the labbook,
+% printed with the claim's label (\berrydeflabel, from the generator).
+\newcommand{\berrydeflabel}[2]{%
+  \expandafter\def\csname berry@label@#1\endcsname{#2}}
+\newcommand{\claimref}[1]{\hyperref[claim:#1]{\berryClaim~\texttt{%
+  \ifcsname berry@label@#1\endcsname\csname berry@label@#1\endcsname\else #1\fi}}}
+
+\newcommand{\berry@missing}[1]{%
+  \begin{tcolorbox}[colback=berrycard,colframe=berrywithdrawn,boxrule=0.5pt,arc=1.5pt]
+    \sffamily\small #1
+  \end{tcolorbox}}
+
+% --- figures ------------------------------------------------------------------
+% \berrydeffigure{id}{n}{file or empty}{caption}
+\newcommand{\berrydeffigure}[4]{%
+  \expandafter\long\expandafter\def\csname berry@fig@#1@#2\endcsname{%
+    \berry@figure{#1}{#2}{#3}{#4}}}
+
+\newcommand{\berry@figure}[4]{%
+  \begin{figure}[H]
+    \centering
+    \ifx\relax#3\relax
+      \berry@missing{\berryFigureMissing: \texttt{#1}, \berryEvidence~#2}%
+    \else
+      \includegraphics[width=0.92\linewidth]{#3}%
+    \fi
+    \caption{#4\ \textcolor{berrymuted}{\footnotesize(\claimref{#1}, \berryEvidence~#2)}}
+  \end{figure}}
+
+% \claimfigure{id}{n}: evidence item n of a claim, as the Library shows it.
+\newcommand{\claimfigure}[2]{%
+  \ifcsname berry@fig@#1@#2\endcsname
+    \csname berry@fig@#1@#2\endcsname
+  \else
+    \berry@missing{\berryFigureMissing: \texttt{#1}, \berryEvidence~#2}%
+  \fi}
+
+% \claimfigures{id}: every figure of a claim, in order (defined by gen).
+\newcommand{\claimfigures}[1]{%
+  \ifcsname berry@figs@#1\endcsname\csname berry@figs@#1\endcsname\fi}
+
+% --- papers checked -------------------------------------------------------------
+% \berrydefsource{path}{paper}{passage}{verdict word}{verdict color}{summary}{link}
+\newcommand{\berrydefsource}[7]{%
+  \expandafter\long\expandafter\def\csname berry@src@#1\endcsname{%
+    \begin{tcolorbox}[enhanced,breakable,colback=berrymutedbg,colframe=berryborder,
+        boxrule=0.5pt,arc=1.5pt,left=10pt,right=10pt,top=5pt,bottom=5pt,
+        borderline west={2pt}{0pt}{#5}]
+      {\sffamily\small\textbf{\berryPaperReview:} #2, #3 —
+        \textcolor{#5}{\textbf{#4}}}\par
+      {\small #6}\par
+      {\footnotesize\sffamily\textcolor{berrymuted}{\texttt{#1}}\hfill #7}
+    \end{tcolorbox}}}
+
+\newcommand{\sourcebox}[1]{%
+  \ifcsname berry@src@#1\endcsname
+    \csname berry@src@#1\endcsname
+  \else
+    \berry@missing{\texttt{#1}}%
+  \fi}
+
+\endinput

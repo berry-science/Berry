@@ -1,0 +1,50 @@
+% The labbook: the logical steps of this project, for a reader — a colleague,
+% a collaborator, yourself in six months. Written by the agent in the
+% researcher's own voice (labbook/voice.md), one \section per step.
+%
+% The boxes, figures and tables come from the claim ledger through
+% claims.gen.tex (`labbook.py gen`). Never copy a claim's text in here:
+% \claimbox{<id>} shows it exactly as the ledger has it.
+\documentclass[11pt,a4paper]{article}
+\usepackage[english]{babel}
+\usepackage{berry-labbook}
+\input{claims.gen.tex}
+
+\title{@TITLE@}
+\author{@AUTHOR@}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Where things stand}
+% Three or four sentences: the question, what has been established so far,
+% and what is open. Rewritten as the project moves.
+
+\berryoverview
+
+% --- the steps ---------------------------------------------------------------
+%
+% \section{<what this step found, in a few words>}
+% Why this step: the question it answered, and why it came next.
+% What was done: the method, in plain words; what was held fixed.
+% \claimbox{<claim id>}
+% \claimfigures{<claim id>}
+% What it means for the next step. Papers checked: \sourcebox{<sources/…json>}
+
+% --- end -----------------------------------------------------------------------
+
+\section*{Open points and follow-up questions}
+\begin{itemize}
+  \item % What is not settled, what to try next, what to ask.
+\end{itemize}
+
+% \section*{Notes}
+% Only what the researcher asked to have written down beyond the claims:
+% context, decisions, remarks. Never in place of a claim. Remove the % to use it.
+
+\appendix
+\section{Conventions}
+\berryconventions
+
+\end{document}

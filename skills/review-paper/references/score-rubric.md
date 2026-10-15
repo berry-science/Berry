@@ -94,7 +94,7 @@ prompt.
 
 ## Verdict bands (for reference)
 
-The verdict is derived from the score mechanically, never by judgement:
+The verdict is derived from the score mechanically, never by judgment:
 `>= 90` clean, `70–89` minor_issues, `40–69` major_issues,
 `< 40` fundamentally_flawed. You output only the number.
 

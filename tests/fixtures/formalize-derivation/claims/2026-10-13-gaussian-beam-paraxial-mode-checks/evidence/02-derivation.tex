@@ -1,0 +1,38 @@
+% The fundamental Gaussian beam, textbook form (e.g. Siegman, Lasers, ch. 16-17).
+% Field E = u(r, z) e^{i(\omega t - kz)}; u obeys the paraxial equation.
+% w is the 1/e^2 intensity radius; z_R = \pi w_0^2 / \lambda, k = 2\pi/\lambda.
+
+The fundamental mode is
+\begin{equation}
+  u(r, z) = \frac{1}{q(z)} \exp\!\left(-\frac{i k r^2}{2 q(z)}\right),
+  \qquad q(z) = z + i z_R .
+  \label{step:mode}
+\end{equation}
+It solves the paraxial wave equation in cylindrical coordinates:
+\begin{equation}
+  \frac{1}{r}\partial_r\!\left(r\,\partial_r u\right) - 2 i k\,\partial_z u = 0 .
+  \label{step:paraxial}
+\end{equation}
+With $w(z)^2 = w_0^2 (1 + z^2/z_R^2)$ and $R(z) = z (1 + z_R^2/z^2)$,
+\begin{align}
+  \frac{1}{q(z)} &= \frac{1}{R(z)} - \frac{i \lambda}{\pi w(z)^2} , \label{step:inverse-q}\\
+  -\frac{i k}{2 q(z)} &= -\frac{1}{w(z)^2} - \frac{i k}{2 R(z)} , \label{step:exponent}
+\end{align}
+so $|u|^2 \propto \exp(-2 r^2 / w^2)$ and the wavefront has radius $R$; the
+curvature phase $k r^2 / (2R)$ is dimensionless:
+\begin{equation}
+  \left[\frac{k r^2}{2 R(z)}\right] = 1 . \label{step:phase-dims}
+\end{equation}
+The prefactor carries the amplitude and the Gouy phase:
+\begin{equation}
+  \frac{i z_R}{q(z)} = \frac{w_0}{w(z)}\, e^{\,i \arctan(z / z_R)} . \label{step:gouy}
+\end{equation}
+Special cases of the beam radius: at the waist, and the far-field divergence,
+\begin{align}
+  \lim_{z \to 0} w(z) &= w_0 , \label{step:waist}\\
+  \lim_{z \to \infty} \frac{w(z)}{z} &= \frac{\lambda}{\pi w_0} . \label{step:divergence}
+\end{align}
+Near the waist, for $z \ll z_R$,
+\begin{equation}
+  w(z) \approx w_0 \left(1 + \frac{z^2}{2 z_R^2}\right) + O(z^4) . \label{step:near-waist}
+\end{equation}

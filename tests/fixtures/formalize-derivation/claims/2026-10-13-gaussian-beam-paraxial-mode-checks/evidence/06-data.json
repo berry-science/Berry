@@ -1,0 +1,47 @@
+{
+  "backend": "sympy",
+  "backend_version": "1.14.0",
+  "expr": "Add(Mul(Integer(-1), I, Pow(pi, Integer(-1)), Symbol('lam', positive=True), Pow(Symbol('w0', positive=True), Integer(-2)), Pow(Add(Mul(Pow(pi, Integer(-2)), Pow(Symbol('lam', positive=True), Integer(2)), Pow(Symbol('w0', positive=True), Integer(-4)), Pow(Symbol('z', positive=True), Integer(2))), Integer(1)), Integer(-1))), Mul(Pow(Symbol('z', positive=True), Integer(-1)), Pow(Add(Integer(1), Mul(Pow(pi, Integer(2)), Pow(Symbol('lam', positive=True), Integer(-2)), Pow(Symbol('w0', positive=True), Integer(4)), Pow(Symbol('z', positive=True), Integer(-2)))), Integer(-1))))",
+  "format_version": 0,
+  "helper": "0.1.0",
+  "latex": "- \\frac{i \\lambda}{\\pi w_0^{2} \\left(\\frac{\\lambda^{2} z^{2}}{\\pi^{2} w_0^{4}} + 1\\right)} + \\frac{1}{z \\left(1 + \\frac{\\pi^{2} w_0^{4}}{\\lambda^{2} z^{2}}\\right)}",
+  "path": {
+    "step:inverse-q": "proved-symbolic"
+  },
+  "regime": null,
+  "result": "inverse_q",
+  "step": "step:inverse-q",
+  "symbols": {
+    "lam": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": null,
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "\\lambda",
+      "name": "lam"
+    },
+    "w0": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": "beam-radius-1e2@1",
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "w_0",
+      "name": "w0"
+    },
+    "z": {
+      "assumptions": [
+        "positive"
+      ],
+      "convention": null,
+      "dim": "length",
+      "kind": "scalar",
+      "latex": "z",
+      "name": "z"
+    }
+  },
+  "verdict": "proved-symbolic"
+}

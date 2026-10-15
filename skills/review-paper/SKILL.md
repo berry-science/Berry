@@ -82,9 +82,9 @@ identify. Look for at least these:
 - **Frequency conventions.** `f` versus `ω`, cycles versus radians, and
   every factor of `2π` that follows from the choice.
 - **Notation.** Does `‖·‖` mean a modulus or its square? Is a norm
-  normalised? Are indices summed implicitly? Is one symbol used for two
+  normalized? Are indices summed implicitly? Is one symbol used for two
   different quantities in different sections?
-- **Normalisations.** One-sided versus two-sided spectral densities,
+- **Normalizations.** One-sided versus two-sided spectral densities,
   amplitude versus power, per-shot versus integrated, Fourier-transform
   sign and prefactor conventions.
 - **Sign conventions.** Metric signature, phase sign, the direction a
@@ -105,7 +105,7 @@ Two rules about where conventions live:
 
 1. **A convention may be declared anywhere, including after the passage
    that relies on it.** A definition introduced in Sec. 5 still governs
-   Sec. 2. Searching only backwards from a suspect passage is how a real
+   Sec. 2. Searching only backward from a suspect passage is how a real
    convention gets missed.
 2. **A convention may live in a cited source.** Where a formula is quoted
    with a citation beside it, the citation may be carrying its definitions
@@ -181,7 +181,7 @@ its model does not hold, is `scope_overreach` and not overclaim.
 
 ## The evidentiary bar for the two new classes
 
-Both are judgement-heavy and both will produce false positives if held
+Both are judgment-heavy and both will produce false positives if held
 loosely. Each has a specific bar, and a finding that cannot meet it is not
 a finding:
 
@@ -206,13 +206,13 @@ Check it against Step 1. Specifically:
 1. Is there a convention in your ledger that makes this passage correct?
    A doubled temperature convention, an absorbed `ħ`, an RMS versus
    Thomas-Fermi width, an `f` where you read an `ω`.
-2. Is there a definition, normalisation or caveat **elsewhere in the
+2. Is there a definition, normalization or caveat **elsewhere in the
    submission**, including later than this passage, that resolves it?
 3. Is there a citation beside it that carries the definition or the regime?
 4. Is this passage about a *different* quantity from the one you compared
    it against — the similarly-named one you noted in Step 1?
 5. Is your evidence a derivation, or is it that the value surprised you? A
-   number being out of line with its neighbours, or larger than you
+   number being out of line with its neighbors, or larger than you
    expected, is a reason to check it and never, by itself, a finding. If
    what you have is "this does not fit the pattern", you do not have one.
 
@@ -354,7 +354,7 @@ mean (1-based); otherwise omit `occurrence`.
 characters in a file reliably, and a confident wrong offset is worse than
 none: the exact position is computed mechanically from your `quote`. A finding
 whose quote does not appear verbatim in the source cannot be located at
-all, so copy — never retype, paraphrase, normalise whitespace, or fix
+all, so copy — never retype, paraphrase, normalize whitespace, or fix
 typos in — the quoted text.
 
 A paper-level finding still needs a quote. Anchor it to the single

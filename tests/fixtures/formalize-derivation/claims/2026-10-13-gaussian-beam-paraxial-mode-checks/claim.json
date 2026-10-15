@@ -1,0 +1,37 @@
+{
+  "id": "2026-10-13-gaussian-beam-paraxial-mode-checks",
+  "status": "draft",
+  "title": "Model: the Gaussian mode u = (1/q) exp(-ik r^2/2q), q = z + i z_R, solves the paraxial equation; its 1/q, Gouy and waist relations check",
+  "statement": "In the paraxial model, u(r, z) = (1/q) exp(-i k r^2/(2q)) with q = z + i z_R and z_R = pi w0^2/lambda satisfies (1/r) d_r(r d_r u) - 2ik d_z u = 0; 1/q = 1/R(z) - i lambda/(pi w(z)^2) with w(z)^2 = w0^2 (1 + z^2/z_R^2) and R(z) = z (1 + z_R^2/z^2); i z_R/q = (w0/w) exp(i arctan(z/z_R)); w(0) = w0, w(z)/z tends to lambda/(pi w0); and w(z) = w0 (1 + z^2/(2 z_R^2)) + O(z^4) near the waist.",
+  "claim_type": "result",
+  "holds_when": "Model, not a measurement: scalar paraxial Gaussian beam in free space, field u e^{i(omega t - kz)}, k = 2 pi/lambda, w the 1/e^2 intensity radius; z, w0, lambda > 0. Checked by SymPy 1.14.0 with mpmath 1.3.0 and pint 0.24.4 under the formalize-derivation helper 0.1.0 (mutation set m0.1); the verdict of each step is in the output. Textbook material, recorded as the skill's worked example.",
+  "evidence": [
+    {"kind": "reasoning", "file": "evidence/01-reasoning.md", "format": "markdown"},
+    {"kind": "derivation", "file": "evidence/02-derivation.tex", "format": "latex",
+     "caption": "The derivation, one \\label{step:...} per checked step."},
+    {"kind": "code", "file": "evidence/03-code.py", "language": "python",
+     "caption": "The check script: each step in SymPy, every verdict by the helper."},
+    {"kind": "code", "file": "evidence/03-code.py.lock", "language": "toml",
+     "caption": "uv lockfile of the check script's dependencies."},
+    {"kind": "output", "file": "evidence/04-output.txt", "local_only": true,
+     "caption": "The check's output, verbatim, with the helper's verdict lines."},
+    {"kind": "output", "file": "evidence/05-output.txt",
+     "caption": "Excerpt of 04-output.txt: the human-readable lines (each step as written and as checked, with its verdict)."},
+    {"kind": "data", "file": "evidence/06-data.json", "format": "json",
+     "caption": "Exported result inverse_q (formalize-derivation format_version 0)."},
+    {"kind": "data", "file": "evidence/07-data.json", "format": "json",
+     "caption": "Exported result w_near_waist, regime z/z_R to order 3 (format_version 0)."}
+  ],
+  "citations": [
+    {"external": "https://en.wikipedia.org/wiki/Gaussian_beam", "relation": "cites",
+     "reason": "The textbook form of the fundamental Gaussian beam that the derivation restates."}
+  ],
+  "conventions": ["beam-radius-1e2@1"],
+  "contributors": ["Claude Code", "SymPy 1.14.0"],
+  "anchors": [],
+  "provenance": {
+    "uncommitted": true,
+    "command": "python3 skills/formalize-derivation/scripts/formalize.py run evidence/03-code.py --out evidence/04-output.txt"
+  },
+  "library": null
+}

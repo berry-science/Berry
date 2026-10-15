@@ -1,6 +1,6 @@
 {
   "name": "berry-science",
-  "description": "Agent skills from Berry Science for checking scientific results",
+  "description": "The Berry Science research harness for coding agents",
   "owner": {
     "name": "Berry Science"
   },
@@ -8,7 +8,7 @@
     {
       "name": "berry",
       "source": "./",
-      "description": "The review agent for scientific papers: find objective errors in a paper's LaTeX source and write a scored JSON review"
+      "description": "Record research findings as checkable claims, check the papers they rest on and the derivations behind them, keep conventions and a labbook; review papers for objective errors"
     }
   ]
 }

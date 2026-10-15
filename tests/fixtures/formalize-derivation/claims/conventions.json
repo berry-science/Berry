@@ -1,0 +1,15 @@
+{
+  "conventions": [
+    {
+      "category": "definition",
+      "key": "beam-radius-1e2",
+      "versions": [
+        {
+          "since": "2026-10-13",
+          "statement": "The beam radius w is the 1/e^2 intensity radius: I(r) = I0 exp(-2 r^2/w^2).",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}

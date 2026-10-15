@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 480" width="880" height="480" role="img" aria-labelledby="title desc">
+  <title id="title">The harness runs in parallel with the research</title>
+  <desc id="desc">Left: the researcher keeps working — runs code and gets results, goes on to the next question, agrees to a drafted claim, reads the project step by step. Right, meanwhile in the background: research-monitoring notices a finding, record-claim drafts it with evidence, formalize-derivation checks its derivation, then the claim is sealed and the labbook adds the step. Between them: results in, one question out. Below the background lane, optionally, berry.science: reads others' reviews of a paper, writes claims and reviews when asked.</desc>
+  <!-- Colors are the berry.science "Ink and Air" tokens, converted to hex. -->
+  <style>
+    .page   { fill: #fbfaf6; stroke: #e2e0d8; }
+    .lane   { fill: #f4f3ee; stroke: #e2e0d8; }
+    .lane-h { fill: #e1eefe; stroke: #c9dcf3; }
+    .step   { fill: #ffffff; stroke: #e2e0d8; }
+    .lib    { fill: #ffffff; stroke: #1268ba; }
+    .ink    { fill: #1a1e25; }
+    .muted  { fill: #636972; }
+    .skill  { fill: #0f4882; }
+    .brand  { fill: #1268ba; }
+    .flow   { stroke: #636972; fill: none; }
+    .flow-h { stroke: #1268ba; fill: none; }
+    .head-l { fill: #636972; }
+    .head-h { fill: #1268ba; }
+    @media (prefers-color-scheme: dark) {
+      .page   { fill: #151410; stroke: #3f3d37; }
+      .lane   { fill: #201e19; stroke: #3f3d37; }
+      .lane-h { fill: #1d2f44; stroke: #2c4562; }
+      .step   { fill: #2d2b26; stroke: #3f3d37; }
+      .lib    { fill: #201e19; stroke: #7bb5f8; }
+      .ink    { fill: #f1f0ec; }
+      .muted  { fill: #aba79f; }
+      .skill  { fill: #bfdafc; }
+      .brand  { fill: #7bb5f8; }
+      .flow   { stroke: #aba79f; }
+      .flow-h { stroke: #7bb5f8; }
+      .head-l { fill: #aba79f; }
+      .head-h { fill: #7bb5f8; }
+    }
+    .serif { font-family: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif; }
+    .sans  { font-family: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .mono  { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+  <defs>
+    <marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" class="muted"/>
+    </marker>
+    <marker id="tip-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,1 L9,5 L0,9 z" class="brand"/>
+    </marker>
+  </defs>
+
+  <rect class="page" x="0.5" y="0.5" width="879" height="479" rx="8"/>
+
+  <!-- The researcher's lane -->
+  <rect class="lane" x="24" y="24" width="300" height="320" rx="6"/>
+  <text class="serif head-l" x="44" y="56" font-size="16" font-weight="600">The researcher keeps working</text>
+  <g class="sans ink" font-size="14">
+    <rect class="step" x="44" y="76" width="260" height="44" rx="5"/>
+    <text x="60" y="103">Runs code, gets results</text>
+    <rect class="step" x="44" y="140" width="260" height="44" rx="5"/>
+    <text x="60" y="167">Goes on to the next question</text>
+    <rect class="step" x="44" y="204" width="260" height="44" rx="5"/>
+    <text x="60" y="231">Agrees to a drafted claim</text>
+    <rect class="step" x="44" y="268" width="260" height="44" rx="5"/>
+    <text x="60" y="295">Reads the project step by step</text>
+  </g>
+  <g class="flow" stroke-width="1.5" marker-end="url(#tip)">
+    <path d="M174,121 V138"/><path d="M174,185 V202"/><path d="M174,249 V266"/>
+  </g>
+
+  <!-- Results in, one question out -->
+  <path class="flow-h" d="M330,196 H422" stroke-width="1.5" marker-start="url(#tip-h)" marker-end="url(#tip-h)"/>
+  <text class="sans muted" font-size="12" text-anchor="middle" x="376" y="182">results in,</text>
+  <text class="sans muted" font-size="12" text-anchor="middle" x="376" y="218">one question out</text>
+
+  <!-- The harness's lane -->
+  <rect class="lane-h" x="428" y="24" width="428" height="320" rx="6"/>
+  <text class="serif head-h" x="448" y="56" font-size="16" font-weight="600">Meanwhile, in the background</text>
+  <g class="sans ink" font-size="14">
+    <rect class="step" x="448" y="76" width="388" height="44" rx="5"/>
+    <text x="464" y="103"><tspan class="mono skill" font-size="13" font-weight="600">research-monitoring</tspan>  notices a finding</text>
+    <rect class="step" x="448" y="140" width="388" height="44" rx="5"/>
+    <text x="464" y="167"><tspan class="mono skill" font-size="13" font-weight="600">record-claim</tspan>  drafts it with evidence</text>
+    <rect class="step" x="448" y="204" width="388" height="44" rx="5"/>
+    <text x="464" y="231"><tspan class="mono skill" font-size="13" font-weight="600">formalize-derivation</tspan>  checks its derivation</text>
+    <rect class="step" x="448" y="268" width="388" height="44" rx="5"/>
+    <text x="464" y="295">Seals it; <tspan class="mono skill" font-size="13" font-weight="600">labbook</tspan> adds the step</text>
+  </g>
+  <g class="flow-h" stroke-width="1.5" marker-end="url(#tip-h)">
+    <path d="M642,121 V138"/><path d="M642,185 V202"/><path d="M642,249 V266"/>
+  </g>
+
+  <!-- berry.science, optional -->
+  <path class="flow-h" d="M642,346 V374" stroke-width="1.5" stroke-dasharray="3 4" marker-start="url(#tip-h)" marker-end="url(#tip-h)"/>
+  <rect class="lib" x="476" y="378" width="332" height="80" rx="6" stroke-width="1.5"/>
+  <!-- The Berry Science mark, seeds cut out -->
+  <svg x="492" y="392" width="50" height="52" viewBox="64.12 63.46 351.76 358.95">
+    <mask id="berry-mark-cut" maskUnits="userSpaceOnUse" x="64.12" y="63.46" width="351.76" height="358.95">
+      <rect x="64.12" y="63.46" width="351.76" height="358.95" fill="#fff"/>
+      <circle cx="139.477" cy="158.764" r="26.166" fill="#000"/><circle cx="123.494" cy="274.799" r="29.77" fill="#000"/><circle cx="231.568" cy="232.568" r="42.625" fill="#000"/><circle cx="212.532" cy="345.946" r="35.046" fill="#000"/><circle cx="238.927" cy="115.83" r="27.817" fill="#000"/><circle cx="337.193" cy="174.46" r="36.048" fill="#000"/><circle cx="327.031" cy="307.324" r="29.85" fill="#000"/>
+    </mask>
+    <g class="brand" mask="url(#berry-mark-cut)">
+      <circle cx="138.705" cy="165.639" r="74.586"/><circle cx="138.705" cy="281.19" r="74.586"/><circle cx="219.074" cy="336.981" r="74.586"/><circle cx="219.388" cy="347.819" r="74.586"/><circle cx="338.593" cy="317.135" r="74.586"/><circle cx="341.295" cy="187.553" r="74.586"/><circle cx="243.423" cy="143.019" r="74.586"/><circle cx="242.22" cy="138.042" r="74.586"/><circle cx="243.423" cy="234.725" r="74.586"/>
+    </g>
+  </svg>
+  <text x="558" y="404" font-size="15"><tspan class="mono brand" font-weight="600">berry.science</tspan><tspan class="sans muted" font-size="13">  · optional</tspan></text>
+  <text class="sans ink" x="558" y="425" font-size="13">reads others' reviews of a paper</text>
+  <text class="sans ink" x="558" y="443" font-size="13">writes claims and reviews, when asked</text>
+</svg>
