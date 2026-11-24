@@ -98,6 +98,7 @@ MAX.update(
         "convention": 1000,
         "conventions": 32,
         "locator": 200,
+        "source_version": 64,
         "quote": 2000,
         "purpose": 1000,
         "summary": 4000,
@@ -467,6 +468,24 @@ RELATED_MIN_WORDS = 3
 RELATED_MIN_SHARE = 0.3
 
 
+# Words that only make sense inside the session that produced the claim.
+SESSION_WORDS = re.compile(r"\b(?:rounds? \d+(?:/\d+)*|hand-?off)\b", re.IGNORECASE)
+
+
+def check_session_words(claim: dict[str, Any], r: Report) -> None:
+    """A claim is read by someone who was not in the session: "round 5" or
+    "the handoff" means nothing to them. A warning, not an error, since the
+    words can have a meaning of their own."""
+    for field in ("title", "statement", "holds_when"):
+        m = SESSION_WORDS.search(claim.get(field) or "")
+        if m:
+            r.warn(
+                claim.get("id", "?"),
+                f"{field} says {m.group(0)!r}: a reader was not in the session; "
+                "say what it was instead",
+            )
+
+
 def check_unsaid_dependencies(
     ledger: Ledger, claim: dict[str, Any], claims: dict[str, dict[str, Any]], r: Report
 ) -> None:
@@ -660,6 +679,7 @@ def check_claim(
     # claim cannot change, and the question is for before it is agreed.
     if status == "draft":
         check_unsaid_dependencies(ledger, claim, claims, r)
+        check_session_words(claim, r)
 
     # The conventions it is written in.
     refs = claim.get("conventions") or []
@@ -874,7 +894,7 @@ def check_source_review(
     summary = review.get("summary") or ""
     if not summary.strip():
         r.error(rel, "summary is missing: what was found, problem first")
-    for field in ("summary", "locator", "quote", "purpose", "method"):
+    for field in ("summary", "source_version", "locator", "quote", "purpose", "method"):
         value = review.get(field)
         if value and len(value) > MAX[field]:
             r.error(rel, f"{field} is longer than {MAX[field]}")
@@ -909,6 +929,21 @@ def check_source_review(
         i.get("proposed_fix") for i in items
     ):
         r.warn(rel, "holds_with_correction without the corrected version: give a proposed_fix")
+
+
+def check_source_files(ledger: Ledger, r: Report) -> None:
+    """sources/ holds reviews only. A paper's PDF or source put there is
+    committed with the ledger, and may not be ours to share."""
+    base = ledger.root / "sources"
+    if not base.is_dir():
+        return
+    for file in sorted(base.rglob("*")):
+        if file.is_file() and file.suffix != ".json" and file.name != ".DS_Store":
+            r.warn(
+                file.relative_to(ledger.root).as_posix(),
+                "not a review: papers go in .berry/papers/ (not committed), "
+                "not in the ledger",
+            )
 
 
 def cycles(claims: dict[str, dict[str, Any]]) -> list[list[str]]:
@@ -1022,6 +1057,7 @@ def check(ledger: Ledger, only: list[str] | None = None) -> Report:
         check_conventions(ledger, r)
         for rel, review in ledger.source_reviews().items():
             check_source_review(ledger, rel, review, claims, r)
+        check_source_files(ledger, r)
     check_ignored(ledger, chosen, r)
     for loop in cycles(claims):
         r.error(loop[0], "citations go in a circle: " + " -> ".join(loop))
@@ -1395,6 +1431,11 @@ def cmd_payload(ledger: Ledger, a: argparse.Namespace) -> int:
     return 0
 
 
+def library_url() -> str:
+    """The Library's address: berry.science, or the site in BERRY_WEB_URL (a local or test Library)."""
+    return os.environ.get("BERRY_WEB_URL", "https://berry.science").rstrip("/") + "/library"
+
+
 def cmd_published(ledger: Ledger, a: argparse.Namespace) -> int:
     claim = ledger.load(a.id)
     if claim.get("status") != "sealed":
@@ -1403,7 +1444,7 @@ def cmd_published(ledger: Ledger, a: argparse.Namespace) -> int:
         raise LedgerError(f"{a.library_id!r} is not a Library claim id")
     claim["library"] = {
         "id": a.library_id,
-        "url": f"https://berry.science/library/{a.library_id}",
+        "url": f"{library_url()}/{a.library_id}",
         "visibility": a.visibility,
         "published_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
@@ -1610,7 +1651,7 @@ def cmd_source_published(ledger: Ledger, a: argparse.Namespace) -> int:
 
     review["library"] = {
         "id": a.library_id,
-        "url": "https://berry.science/library/source?key=" + quote_plus(review["source"]),
+        "url": f"{library_url()}/source?key=" + quote_plus(review["source"]),
         "visibility": a.visibility,
         "published_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }

@@ -44,6 +44,11 @@ Not yet a claim:
 - **A test passing, a build working, a plot drawn.** Engineering, not a
   finding — unless the plot shows something that could be false.
 
+**A further check is not a reason to wait.** If the result stands under
+the conditions already run, record it now with those conditions in
+`holds_when`; a later check that changes it becomes a claim that extends
+or refutes it.
+
 **When unsure**, draft it: a draft costs nothing and is deleted if the
 researcher disagrees. A missing claim under a result costs the whole chain.
 

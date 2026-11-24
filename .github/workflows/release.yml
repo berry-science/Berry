@@ -1,0 +1,46 @@
+# On a version tag: test, build the chat bundle, and open a draft release
+# with the bundle attached and the version's CHANGELOG section as its notes.
+# The draft is published by hand.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    if: github.repository == 'berry-science/berry'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: python3 -m unittest discover -s tests
+
+      - name: Version matches the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          for f in plugin.json .claude-plugin/plugin.json; do
+            grep -q "\"version\": \"$v\"" "$f" || { echo "::error::$f is not $v"; exit 1; }
+          done
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## /{on = ($2 == v)} on' CHANGELOG.md | tail -n +2 > notes.md
+          [ -s notes.md ] || { echo "::error::CHANGELOG.md has no section for $v"; exit 1; }
+
+      - name: Chat bundle
+        run: |
+          bash clients/chat/bundle.sh
+          (cd dist/chat && zip -qr ../berry-chat-project.zip project)
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "Berry ${GITHUB_REF_NAME#v}" --notes-file notes.md \
+            dist/chat/skills/*.zip dist/berry-chat-project.zip

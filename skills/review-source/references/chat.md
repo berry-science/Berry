@@ -57,12 +57,15 @@ start from its proposed fix.
 
 ## 4. Record it
 
-Show the researcher the review — passage, verdict, each problem with its
-fix — and whether it will be public (recommend public: the next reader of
-the paper is who it is for) or private. On their go-ahead, call
-`review_source` with:
+First read the summary against the verdict: if the summary finds a
+problem the verdict ignores, one of the two is wrong. Show the researcher
+the review — passage, verdict, each problem with its fix — and whether
+it will be public (recommend public: the next reader of the paper is
+who it is for) or private. On their go-ahead, call `review_source` with:
 
-- `source`, `source_version`, `locator`, `quote` (verbatim), `purpose`;
+- `source` and `source_version` of the copy you read (a publisher's PDF:
+  its DOI; an arXiv copy: its id and version), `locator`, `quote`
+  (verbatim), `purpose`;
 - `read_from`: `latex`, `pdf`, `html`, `other` or `none`;
 - `verdict`: `holds`, `holds_with_correction`, `fails`, `could_not_check`;
 - `summary` (problem first), `method`, `conventions` (each with `paper`,

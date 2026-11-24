@@ -108,7 +108,9 @@ in the ledger. If a sealed claim has a large file that is not marked,
   asked otherwise. If it isn't, or the field is missing, stop before
   publishing anything else and ask the user to check the claim on
   berry.science.
-- Tell the user each claim's Library id and link
-  (`https://berry.science/library/<id>`), that it is private and
+- After the project's first upload, if its labbook is not on berry.science
+  yet, offer once to put it there (skill `labbook`), beside the claims.
+- Tell the user each claim's Library id and link (the one
+  `claims.py published` printed), that it is private and
   unreviewed, and that they can make it public from their library on
   berry.science.

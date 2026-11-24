@@ -220,6 +220,10 @@ server and sign in with your berry.science account:
 The plugin does not add it for you, so nobody working offline is asked to
 sign in.
 
+If the sign-in ends on a `localhost` page that cannot be reached (for
+example in tmux on a remote machine), copy that page's full URL from the
+browser's address bar and paste it where Claude Code asks for it.
+
 ### Chat windows
 
 In Claude.ai, ChatGPT or similar, the skills switch to their chat

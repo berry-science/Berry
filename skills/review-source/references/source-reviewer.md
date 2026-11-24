@@ -16,11 +16,14 @@ conventions are in your prompt and in the repository.
    from the page images). If neither can be downloaded, **stop and reply**
    that the researcher needs to provide it, with the paper and where to put
    it (`.berry/papers/<paper>/`). Do not ask the researcher yourself.
+   Send an email address to a lookup service only if `.berry/email`
+   holds one.
 3. Conventions first, from the whole paper; map each onto `claims.py conv
    list`. Then check the passage for its use, holding every finding to
    the evidentiary bar of `review-paper`.
-4. `claims.py source new <paper> --locator "…"`, fill it in, `claims.py
-   check <path>` until clean.
+4. `claims.py source new <paper> --locator "…"` (the copy you read, with
+   its version), fill it in, read the summary against the verdict, and
+   `claims.py check <path>` until clean.
 5. If the passage is wrong and fixable, say so and give the corrected
    version in full in your reply — the correction claim is drafted by the
    main agent with the researcher, not by you. Do not seal, publish or

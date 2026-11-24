@@ -1,6 +1,6 @@
 {
   "name": "berry",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A research harness for coding agents: notices findings as they happen and records each as a checkable claim with its evidence, checks the passage of every paper a claim uses, keeps the project's conventions, gives each derivation an executable SymPy check, looks in the claims before relying on memory, and keeps a labbook PDF to follow the project step by step — plus Berry Science's paper reviewer",
   "author": {
     "name": "Berry Science"

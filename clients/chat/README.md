@@ -37,13 +37,15 @@ to us at [berry.science/pilot](https://berry.science/pilot) to get one.
 
 ## Get the files
 
-In a copy of this repository:
+Download them from the [latest release](https://github.com/berry-science/berry/releases/latest):
+one zip per skill, and `berry-chat-project.zip`, which unpacks to `project/`.
+Or build them in a copy of this repository:
 
 ```bash
 bash clients/chat/bundle.sh
 ```
 
-This writes `dist/chat/`:
+which writes `dist/chat/`:
 
 - `skills/*.zip`, one per skill, to upload as skills: research-monitoring,
   recall, publish-claim, check-claims, review-source, conventions, labbook;

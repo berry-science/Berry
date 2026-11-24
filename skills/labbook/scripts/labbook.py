@@ -179,7 +179,7 @@ def ledger_claim(lb: Labbook, c: dict[str, Any], figures: list[dict[str, Any]]) 
         out = {k: cit.get(k) for k in ("relation", "local", "external", "locator")}
         if cit.get("claim_id"):
             out["external"] = cit["claim_id"]
-            out["url"] = f"https://berry.science/library/{cit['claim_id']}"
+            out["url"] = f"{ledger_tool.library_url()}/{cit['claim_id']}"
         if cit.get("review"):
             out["verdict"] = (lb.ledger.source_review(cit["review"]) or {}).get("verdict")
         citations.append(out)

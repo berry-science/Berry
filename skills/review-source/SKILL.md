@@ -88,6 +88,11 @@ In this order, and stop at the first that works:
 Never commit downloaded papers to the repository unless the researcher
 says so: add `.berry/` to `.gitignore` (ask first; it is their file).
 
+Some services want an email address to look a paper up (Unpaywall, for
+one). Ask the researcher once whether theirs may be used for that, and
+keep the answer in `.berry/email`: the address, or `no`. Never send it
+without that answer.
+
 ## 3. Read the conventions the passage depends on
 
 Before judging the passage, write down every convention it depends on —
@@ -124,6 +129,10 @@ it.
 claims.py source new <paper> --locator "Eq. (12)"     # prints sources/<paper>/<file>.json
 ```
 
+`<paper>` names the copy you read, with its version: the journal's DOI for
+a publisher's PDF, `arxiv:<id>v<n>` for an arXiv copy. They can differ in
+the very passage you check.
+
 Fill in the file (format reference): the passage verbatim in `quote`, what
 it is used for in `purpose`, what you read in `read_from`, the conventions
 and their mapping, one item per problem with the corrected version in full
@@ -139,6 +148,9 @@ they checked it too). Then `claims.py check sources/<paper>/<file>.json`.
 | `holds_with_correction` | Wrong as printed, and you can fix it | Record the corrected version as its own claim (below); build on that |
 | `fails` | Wrong, and not fixable here | Nothing may `use` it; `check` refuses a claim that does |
 | `could_not_check` | Not obtainable, or the check could not be done | The claim may use it, and says so in `holds_when` |
+
+Before `check`, read the summary against the verdict: a summary that finds
+a problem the verdict ignores means one of the two is wrong.
 
 ## 6. A wrong passage: correct it, and build on the correction
 

@@ -383,6 +383,18 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("the verdict is 'could_not_check'", out)
 
+    def test_a_version_longer_than_the_library_takes_is_an_error(self) -> None:
+        rel = self.review("arxiv:2502.09437", "Eq. (12)", source_version="v" * 65)
+        code, out, _ = run(self.root, "check", rel)
+        self.assertEqual(code, 1)
+        self.assertIn("source_version is longer than 64", out)
+
+    def test_a_paper_kept_in_the_ledger_is_questioned(self) -> None:
+        rel = self.review("arxiv:2502.09437", "Eq. (12)")
+        (self.root / rel).parent.joinpath("paper.pdf").write_bytes(b"%PDF")
+        _, out, _ = run(self.root, "check")
+        self.assertIn("paper.pdf: not a review: papers go in .berry/papers/", out)
+
     def test_using_a_paper_without_a_review_is_questioned(self) -> None:
         cid = self.draft(
             "A", "The residual is 31.1 um.", "Log.",
@@ -625,6 +637,16 @@ class LedgerTest(unittest.TestCase):
         _, out, _ = run(self.root, "check", b)
         self.assertNotIn("cites no earlier claim", out)
 
+    def test_a_draft_naming_a_session_round_is_questioned(self) -> None:
+        cid = self.draft("Round 5 ramp", "The residual is 31.1 um.", "Log.")
+        _, out, _ = run(self.root, "check", cid)
+        self.assertIn("title says 'Round 5'", out)
+        claim = self.load(cid)
+        claim["title"] = "A round-trip ramp leaves 31.1 um"
+        self.save(claim)
+        _, out, _ = run(self.root, "check", cid)
+        self.assertNotIn("a reader was not in the session", out)
+
     def test_an_unrelated_draft_is_not_asked(self) -> None:
         a = self.draft("Residual", "The residual is 31.1 um.", "Log.")
         run(self.root, "seal", a)
@@ -658,5 +680,17 @@ class LedgerTest(unittest.TestCase):
         self.assertNotIn("numbers in the reasoning", out)
 
 
+class LibraryUrlTest(unittest.TestCase):
+    def test_berry_science_unless_berry_web_url_is_set(self) -> None:
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {}, clear=False) as env:
+            env.pop("BERRY_WEB_URL", None)
+            self.assertEqual(claims.library_url(), "https://berry.science/library")
+        with mock.patch.dict("os.environ", {"BERRY_WEB_URL": "http://127.0.0.1:3001/"}):
+            self.assertEqual(claims.library_url(), "http://127.0.0.1:3001/library")
+
+
 if __name__ == "__main__":
     unittest.main()
+

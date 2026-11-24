@@ -123,7 +123,9 @@ the user.
    stands. If it uses an earlier finding that is not recorded, record that
    one first.
 
-7. **Show it, then seal it.** Show the user the title, statement,
+7. **Show it, then seal it.** First re-read the draft against what the
+   user decided since it was written: a condition they have since
+   settled must not still read as open. Show the user the title, statement,
    `holds_when`, what it builds on (the earlier claims it cites, or why
    none) with the other citations, and the evidence list in a few lines. Seal
    when they agree — or right away, if they asked you to record findings
@@ -182,6 +184,9 @@ do. The labbook's voice is not asked: write it from their messages.
   checkable. No hedging, and no judgment without its reference point:
   not *negligible* or *dominant*, but the comparison, with the thing
   compared against named and from the same work.
+- **It stands outside the session.** No session labels (*round 5*, *the
+  handoff*, *run B*) and no plans: a reader who was not there must follow
+  it. `check` warns on the common ones.
 - **Every number comes from this claim's evidence.** `check` flags numbers
   it cannot find in any evidence file.
 - **`holds_when` starts with the kind of evidence** (simulation, model,
