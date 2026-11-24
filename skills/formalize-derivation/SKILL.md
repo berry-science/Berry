@@ -15,7 +15,7 @@ can, later, with its own copy of the helper.
 
 **In a chat window?** The helper needs a shell and Python in the
 research repository. Without them — as in Claude.ai or ChatGPT — record
-the derivation as a `derivation` evidence item (publish-claim's
+the derivation as a `derivation` evidence item (the claims skill's
 `references/chat.md`) and say plainly in the reasoning that it has no
 executable check. A computation in the chat's own code tool is not this
 skill's check: report what it showed, never "verified".
@@ -41,8 +41,8 @@ never reported as proved, and a check that cannot fail is reported as
 
 ## The evidence
 
-In the claim's `evidence/`, numbered in reading order (see record-claim's
-[claim-format.md](../record-claim/references/claim-format.md)):
+In the claim's `evidence/`, numbered in reading order (see the claims skill's
+[claim-format.md](../claims/references/claim-format.md)):
 
 | File | `kind` | What |
 |---|---|---|
@@ -53,7 +53,7 @@ In the claim's `evidence/`, numbered in reading order (see record-claim's
 | `NN-data.json` | `data`, format `json` | Each exported result. |
 | `*.as-written.*` | `derivation`, `code`, `output` | Where the derivation as found had a step that failed: its `.tex`, script and output, each captioned `As written: …` (step 3). |
 
-`claims.py check` (skill record-claim) runs this skill's coverage check on
+`claims.py check` (skill claims) runs this skill's coverage check on
 every claim with a `derivation` item.
 
 ## How
@@ -206,7 +206,7 @@ still work.
    variables.
 
 7. **List the files** in `claim.json` (table above), then
-   `claims.py check <id>` (skill record-claim). It runs the coverage
+   `claims.py check <id>` (skill claims). It runs the coverage
    check: errors for a FAIL or vacuous step, a step label in the output
    that the `.tex` does not have, a verdict line the helper did not
    write, a lint violation in the script, an output from another version

@@ -1,5 +1,5 @@
 """Tests for skills/labbook/scripts/labbook.py and
-skills/research-monitoring/scripts/watch.py.
+skills/claims/scripts/watch.py.
 
 No LaTeX and no vl-convert needed: these check what is generated and when
 the hooks speak, not the PDF.
@@ -21,8 +21,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skills" / "labbook" / "scripts"))
-sys.path.insert(0, str(ROOT / "skills" / "research-monitoring" / "scripts"))
-sys.path.insert(0, str(ROOT / "skills" / "record-claim" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
 
 import hook_event  # noqa: E402
 import labbook  # noqa: E402
@@ -140,6 +140,9 @@ class GenerateTest(unittest.TestCase):
         self.assertFalse(labbook.relevant(self.lb, event))
         seal = {"tool_name": "Bash", "tool_input": {"command": "python3 claims.py seal 2026-x"}}
         self.assertTrue(labbook.relevant(self.lb, seal))
+        # Publishing records the Library link the claim's box shows.
+        publish = {"tool_name": "Bash", "tool_input": {"command": "python3 claims.py publish --ready"}}
+        self.assertTrue(labbook.relevant(self.lb, publish))
         other = {"tool_name": "Bash", "tool_input": {"command": "python3 claims.py check"}}
         self.assertFalse(labbook.relevant(self.lb, other))
 
@@ -293,7 +296,7 @@ class CodexEventTest(unittest.TestCase):
                 sys.stdin = stdin
             note = json.loads(out.getvalue())["hookSpecificOutput"]["additionalContext"]
             self.assertIn("residual 0.009 um", note)
-            self.assertIn("references/claim-drafter.md", note)
+            self.assertIn("berry:claim-checker", note)
 
 
 class PluginManifestTest(unittest.TestCase):

@@ -1,4 +1,4 @@
-"""Tests for when research-monitoring notices a result, and for the labbook
+"""Tests for when the claims hook notices a result, and for the labbook
 starting with the first sealed claim — replaying how a real session ran:
 a simulation sent to the background, its log read later with tail or the
 Read tool, in a project where Berry was enabled but no ledger existed yet.
@@ -20,8 +20,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "skills" / "record-claim" / "scripts"))
-sys.path.insert(0, str(ROOT / "skills" / "research-monitoring" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
 sys.path.insert(0, str(ROOT / "skills" / "labbook" / "scripts"))
 sys.path.insert(0, str(ROOT / "skills" / "recall" / "scripts"))
 
@@ -140,7 +140,7 @@ class QuietAndReminderTest(Repo):
     def test_a_note_nobody_acted_on_comes_back_once(self) -> None:
         self.bash("tail data/ramp_a.log", LOG)
         reminder = self.remind()
-        self.assertIn("no claim was drafted since", reminder)
+        self.assertIn("no claim was written since", reminder)
         self.assertIn("ramp_a.log", reminder)
         self.assertEqual(self.remind(), "")
 
@@ -181,7 +181,7 @@ class WaitingDraftsTest(Repo):
         self.draft("2026-10-14-old", 7200)
         self.draft("2026-10-14-fresh", 60)
         note = self.remind()
-        self.assertIn("1 draft(s) waiting for the user to agree: 2026-10-14-old", note)
+        self.assertIn("1 draft(s) still unsealed: 2026-10-14-old", note)
         self.assertNotIn("fresh", note)
         self.assertEqual(self.remind(), "")
         self.assertIn("2026-10-14-old", self.remind(session="other"))

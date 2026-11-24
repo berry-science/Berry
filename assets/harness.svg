@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 480" width="880" height="480" role="img" aria-labelledby="title desc">
   <title id="title">The harness runs in parallel with the research</title>
-  <desc id="desc">Left: the researcher keeps working — runs code and gets results, goes on to the next question, agrees to a drafted claim, reads the project step by step. Right, meanwhile in the background: research-monitoring notices a finding, record-claim drafts it with evidence, formalize-derivation checks its derivation, then the claim is sealed and the labbook adds the step. Between them: results in, one question out. Below the background lane, optionally, berry.science: reads others' reviews of a paper, writes claims and reviews when asked.</desc>
+  <desc id="desc">Left: the researcher keeps working — runs code and gets results, goes on to the next question, says once where claims go, reads the project step by step. Right, meanwhile in the background: the claims skill notices a finding and writes it down, the claim-checker checks it independently, formalize-derivation checks its derivation, then the claim is sealed and published and the labbook adds the step. Between them: results in, one question out. Below the background lane, berry.science: reads others' reviews of a paper, keeps the published claims.</desc>
   <!-- Colors are the berry.science "Ink and Air" tokens, converted to hex. -->
   <style>
     .page   { fill: #fbfaf6; stroke: #e2e0d8; }
@@ -55,7 +55,7 @@
     <rect class="step" x="44" y="140" width="260" height="44" rx="5"/>
     <text x="60" y="167">Goes on to the next question</text>
     <rect class="step" x="44" y="204" width="260" height="44" rx="5"/>
-    <text x="60" y="231">Agrees to a drafted claim</text>
+    <text x="60" y="231">Says once where claims go</text>
     <rect class="step" x="44" y="268" width="260" height="44" rx="5"/>
     <text x="60" y="295">Reads the project step by step</text>
   </g>
@@ -73,13 +73,13 @@
   <text class="serif head-h" x="448" y="56" font-size="16" font-weight="600">Meanwhile, in the background</text>
   <g class="sans ink" font-size="14">
     <rect class="step" x="448" y="76" width="388" height="44" rx="5"/>
-    <text x="464" y="103"><tspan class="mono skill" font-size="13" font-weight="600">research-monitoring</tspan>  notices a finding</text>
+    <text x="464" y="103"><tspan class="mono skill" font-size="13" font-weight="600">claims</tspan>  notices a finding, writes it down</text>
     <rect class="step" x="448" y="140" width="388" height="44" rx="5"/>
-    <text x="464" y="167"><tspan class="mono skill" font-size="13" font-weight="600">record-claim</tspan>  drafts it with evidence</text>
+    <text x="464" y="167"><tspan class="mono skill" font-size="13" font-weight="600">claim-checker</tspan>  checks it, independently</text>
     <rect class="step" x="448" y="204" width="388" height="44" rx="5"/>
     <text x="464" y="231"><tspan class="mono skill" font-size="13" font-weight="600">formalize-derivation</tspan>  checks its derivation</text>
     <rect class="step" x="448" y="268" width="388" height="44" rx="5"/>
-    <text x="464" y="295">Seals it; <tspan class="mono skill" font-size="13" font-weight="600">labbook</tspan> adds the step</text>
+    <text x="464" y="295">Sealed, published; <tspan class="mono skill" font-size="13" font-weight="600">labbook</tspan> adds the step</text>
   </g>
   <g class="flow-h" stroke-width="1.5" marker-end="url(#tip-h)">
     <path d="M642,121 V138"/><path d="M642,185 V202"/><path d="M642,249 V266"/>

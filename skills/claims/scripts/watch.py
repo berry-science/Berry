@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """PostToolUse hook: notice when a run may have settled something.
 
-Runs in a research repository that keeps a claim ledger (a claims/ folder
-at the git root), where Berry is enabled in the project's
-.claude/settings.json, or with BERRY_WATCH=1. It never blocks and never
+Runs in a research project that keeps a claim ledger, or where Berry is
+enabled in the project's .claude/settings.json, or with BERRY_WATCH=1. The
+project is the nearest folder up from the session's directory with a
+claims/ ledger or Berry enabled, else the git root (berry_project.py): a
+repository can hold several projects, and each keeps its own state. It never blocks and never
 asks the researcher anything. It looks where results appear: a command
 that printed numbers (not git or ls or a test suite), and a run's output
 read later — `tail run.log`, the Read tool on a .log or .csv, a background
 command's output fetched — because a long run goes to the background and
 its results are seen only when its log is read. Then it hands the agent a
 short note: decide whether this reached claim level
-(references/claim-threshold.md), and if it did, draft the claim in the
-background while the work goes on.
+(references/claim-threshold.md), and if it did, write the claim and start
+the independent claim-checker in the background while the work goes on.
 
 The judgment is the agent's, because only it knows what the numbers mean;
 this script only decides *when* to ask, cheaply, and not too often: at most
 once per BERRY_WATCH_INTERVAL seconds (default 600) per session. Results
 seen in between are kept for the next note. `watch.py remind`, on the
-user's next message, brings back a note nobody acted on — no claim drafted
+user's next message, brings back a note nobody acted on — no claim written
 since — once.
 
 Standard library only. Exit 0 always: a monitor that breaks the session is
@@ -30,13 +32,13 @@ import json
 import os
 import re
 import shlex
-import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "record-claim" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "claims" / "scripts"))
+import berry_project  # noqa: E402  (which project, which ledger)
 import hook_event  # noqa: E402  (Claude Code and Codex events alike)
 
 # The first word of commands that do not produce findings.
@@ -66,16 +68,6 @@ MAX_PENDING = 5
 # A number worth noticing: a decimal or an exponent, not a line number.
 RESULT_NUMBER = re.compile(r"(?<![\w.])[-+]?\d+\.\d+(?:[eE][-+]?\d+)?|\d[eE][-+]?\d+")
 MIN_NUMBERS = 2
-
-
-def git(*args: str, cwd: Path) -> str | None:
-    try:
-        out = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=5
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out.stdout.strip() if out.returncode == 0 else None
 
 
 def first_word(command: str) -> str:
@@ -128,26 +120,26 @@ def drafts(ledger: Path) -> list[str]:
     return found
 
 
-def state_file(root: Path) -> Path:
-    git_dir = git("rev-parse", "--absolute-git-dir", cwd=root)
-    base = Path(git_dir) if git_dir else Path(os.environ.get("TMPDIR", "/tmp"))
-    return base / "berry-watch.json"
+def state_file(project: berry_project.Project) -> Path:
+    """berry-watch.json in the git directory, one per project: two projects
+    in one repository share neither the rate limit nor what was noticed."""
+    return project.state_file("berry-watch.json")
 
 
-def load_state(root: Path) -> dict[str, Any]:
+def load_state(project: berry_project.Project) -> dict[str, Any]:
     try:
-        state = json.loads(state_file(root).read_text())
+        state = json.loads(state_file(project).read_text())
     except (OSError, json.JSONDecodeError):
         return {}
     return state if isinstance(state, dict) else {}
 
 
-def save_state(root: Path, state: dict[str, Any]) -> None:
+def save_state(project: berry_project.Project, state: dict[str, Any]) -> None:
     now = time.time()
     # Forget sessions older than a day, so the file does not grow forever.
     state = {k: v for k, v in state.items() if now - float(session(state, k)["touched"]) < 86400}
     try:
-        state_file(root).write_text(json.dumps(state))
+        state_file(project).write_text(json.dumps(state))
     except OSError:
         pass
 
@@ -191,29 +183,26 @@ def note(items: list[dict[str, Any]], waiting: list[str], has_ledger: bool) -> s
         for item in items
     )
     text = (
-        "[research-monitoring] Results were printed or read:\n"
+        "[claims] Results were printed or read:\n"
         f"{shown}\n"
-        "Is this a claim (research-monitoring, claim-threshold.md)? If not, "
-        "ignore this note and say nothing. If it is, have it drafted in the "
-        "background — references/claim-drafter.md (Claude Code: "
-        "berry:claim-drafter) — handing over the finding, the command, the "
-        "commit or that the code is uncommitted, where the output is (the "
-        "file above, verbatim), what it builds on and its conventions. "
-        "Where nothing runs in the background, draft it after answering. "
-        "Carry on with the user's task; one line about the draft at the end "
-        "of your reply."
+        "Is this a claim (skill claims, claim-threshold.md)? If not, say "
+        "nothing. If it is, write claims/<id>/claim.md yourself (claims.py "
+        "new; evidence as paths to the output on disk) and start the claim-checker in "
+        "the background (Claude Code: berry:claim-checker). Never interrupt "
+        "the user: carry on with their task."
     )
     if not has_ledger:
         text += (
             "\nBerry is enabled for this project but it has no claim ledger "
             "yet: if this is a finding, recording it starts the ledger "
-            "(claims.py new creates claims/). Say so to the user in one line."
+            "(claims.py new creates claims/), with the one setup message of "
+            "the first claim (skill claims)."
         )
     if waiting:
         text += (
-            f"\nDrafts waiting for the user to agree ({len(waiting)}): "
+            f"\nDrafts not yet sealed ({len(waiting)}): "
             + ", ".join(waiting[:6])
-            + ". A draft is agreed and sealed before anything builds on it."
+            + ". Nothing builds on a draft until the claim-checker has sealed it."
         )
     return text
 
@@ -221,13 +210,12 @@ def note(items: list[dict[str, Any]], waiting: list[str], has_ledger: bool) -> s
 def reminder(items: list[dict[str, Any]]) -> str:
     shown = "\n".join(f"  {item['what']}" for item in items)
     return (
-        "[research-monitoring] Results noticed earlier in this session, and "
-        f"no claim was drafted since:\n{shown}\n"
+        "[claims] Results noticed earlier in this session, and no claim "
+        f"was written since:\n{shown}\n"
         "Decide now, beside the user's request, whether each is a claim "
-        "(claim-threshold.md); if one is, have it drafted in the background "
-        "(claim-drafter.md) and carry on. If you already judged them not to "
-        "be claims, or a drafter is on them, ignore this note. It is not "
-        "repeated."
+        "(claim-threshold.md); if one is, write its claim.md and start the "
+        "claim-checker in the background. If you already judged them not to "
+        "be claims, ignore this note. It is not repeated."
     )
 
 
@@ -250,18 +238,18 @@ def waiting_long(ledger: Path) -> list[str]:
 
 def drafts_note(old: list[str]) -> str:
     return (
-        f"[research-monitoring] {len(old)} draft(s) waiting for the user to "
-        "agree: " + ", ".join(old[:8]) + ". At a natural pause — not in the "
-        "middle of their task — offer to go through them: nothing can build "
-        "on a draft, and only sealed claims get a labbook step."
+        f"[claims] {len(old)} draft(s) still unsealed: "
+        + ", ".join(old[:8]) + ". If the claim-checker has not run on one, "
+        "start it. Held ones (claims.py pending shows their open issues) go "
+        "to the user at a natural pause, not in the middle of their task."
     )
 
 
-def watching(root: Path) -> bool:
+def watching(project: berry_project.Project) -> bool:
     return (
-        (root / "claims").is_dir()
+        project.has_ledger
         or os.environ.get("BERRY_WATCH") == "1"
-        or hook_event.berry_enabled_here(root)
+        or project.enabled
     )
 
 
@@ -278,13 +266,12 @@ def main(argv: list[str] | None = None) -> int:
         event: dict[str, Any] = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return 0
-    cwd = Path(event.get("cwd") or os.getcwd())
-    root = Path(git("rev-parse", "--show-toplevel", cwd=cwd) or cwd)
-    if not watching(root):
+    project = berry_project.find_project(event.get("cwd") or None)
+    if not watching(project):
         return 0
-    ledger = root / "claims"
+    ledger = project.ledger
     key = str(event.get("session_id") or "session")
-    state = load_state(root)
+    state = load_state(project)
     entry = session(state, key)
     entry["touched"] = time.time()
 
@@ -299,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         if old and not entry.get("drafts_said"):
             entry["drafts_said"] = True
             notes.append(drafts_note(old))
-        save_state(root, state)
+        save_state(project, state)
         if notes:
             print(json.dumps({"hookSpecificOutput": {
                 "hookEventName": "UserPromptSubmit",
@@ -315,11 +302,11 @@ def main(argv: list[str] | None = None) -> int:
     if now - float(entry["last"]) < interval:
         # Quiet for now, but kept: the next note lists it.
         entry["pending"] = (entry["pending"] + [item])[-MAX_PENDING:]
-        save_state(root, state)
+        save_state(project, state)
         return 0
     items = entry["pending"] + [item]
     entry.update(last=now, pending=[], noticed={"at": now, "items": items})
-    save_state(root, state)
+    save_state(project, state)
     context = note(items, drafts(ledger) if ledger.is_dir() else [], ledger.is_dir())
     print(json.dumps({
         "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": context}

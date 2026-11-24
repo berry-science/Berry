@@ -3,6 +3,53 @@
 What changed in each release of Berry, for the people using it. Each
 section's text is also the release's notes on GitHub.
 
+## 0.4.0 — 2026-11-24
+
+Berry gets lighter and publishes on its own: the agent writes each finding
+down itself, an independent checker reads it, and a checked claim is sealed
+and published to berry.science without asking each time.
+
+### Changed
+
+- One `claims` skill replaces `record-claim`, `publish-claim` and
+  `research-monitoring`; the skills an agent reads on the claim path are a
+  fraction of their former length, and every other skill is shorter too.
+- A claim is written as a short `claim.md` — a header, the reasoning, the
+  evidence as paths to files already on disk, the citations — which
+  `claims.py` compiles into the ledger. Output is copied, never retyped.
+- The main agent writes the claim itself; the background drafter is gone.
+- An independent `claim-checker` agent checks each claim, seeing only the
+  files: at most two rounds. A pass seals the claim; issues left after the
+  second round hold it as a draft for you (`claims.py pending`). Sealing
+  without a passing check needs `--without-check`.
+- Publishing is asked about once per project, together with where claims go
+  (`claims.py where`): your private library, or a team and one of its
+  labbooks. After that, checked claims are published as you work, privately
+  unless you chose otherwise.
+- In chat windows, Berry asks once where claims go, then publishes each
+  finding when it is established, after `check_claim_draft` and a re-read.
+- `check-claims` is now for audits you ask for; the per-claim check is the
+  checker's.
+
+### Added
+
+- `claims.py login`, `logout`, `where` and `publish`: claims and the source
+  reviews they cite go to berry.science over HTTP, are read back and compared
+  with what was sent, and only then recorded. A retry never makes a second
+  copy.
+- A repository can hold several projects, each with its own ledger and
+  labbook in its folder; `claims.py init` starts one there, and the hooks and
+  `formalize.py` find the nearest.
+- `claims.py checked`, which records the checker's verdict.
+- In a team, claims can be filed in a labbook — one topic of the team — and
+  read topic by topic.
+
+### Fixed
+
+- The labbook PDF is rebuilt after publishing, so its Library links appear.
+- For a project below the top of the repository, `check`'s `.gitignore`
+  advice names the ledger's path, so following it re-includes the files.
+
 ## 0.3.1 — 2026-11-24
 
 Fixes from running Berry on real referee work: source reviews name what was

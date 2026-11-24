@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "record-claim" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills" / "claims" / "scripts"))
 
 import claims  # noqa: E402
 
@@ -28,7 +28,7 @@ class ContributorsTest(unittest.TestCase):
         self.root = Path(self.tmp.name) / "claims"
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            claims.main(["--root", str(self.root), "new", "A finding", "--type", "result"])
+            claims.main(["--root", str(self.root), "new", "A finding", "--type", "result", "--json"])
         self.cid = out.getvalue().splitlines()[0]
         folder = self.root / self.cid
         (folder / "evidence" / "01-reasoning.md").write_text("Why it holds.\n")

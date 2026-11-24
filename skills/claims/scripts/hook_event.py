@@ -13,13 +13,14 @@ differently:
 - the output of a command is `tool_response.stdout` in Claude Code; other
   agents send a string or another field.
 
-The hooks of this repository (research-monitoring's watch.py, labbook.py)
-read events only through these functions. Standard library only.
+The hooks of this repository (the claims skill's watch.py, labbook.py)
+read events only through these functions; which project an event belongs
+to — where its ledger is, whether Berry is enabled there — is
+berry_project.py's answer. Standard library only.
 """
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -139,23 +140,3 @@ def read_result(event: dict[str, Any]) -> tuple[str, str] | None:
     if not text:
         text = output(event)
     return (path, text)
-
-
-def berry_enabled_here(root: Path) -> bool:
-    """Is the berry plugin switched on in this project's own settings
-    (.claude/settings.json or settings.local.json)? Then the project is
-    meant to keep a ledger, even before it has one. A plugin enabled only
-    in the user's global settings does not count: that would make every
-    repository look like research."""
-    for name in ("settings.json", "settings.local.json"):
-        file = root / ".claude" / name
-        try:
-            data = json.loads(file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        plugins = data.get("enabledPlugins") if isinstance(data, dict) else None
-        if isinstance(plugins, dict) and any(
-            str(k).split("@")[0] == "berry" and v for k, v in plugins.items()
-        ):
-            return True
-    return False

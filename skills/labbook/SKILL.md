@@ -1,168 +1,84 @@
 ---
 name: labbook
-description: Keep the project's labbook: a LaTeX document, rebuilt as PDF, with one step per sealed claim, in the researcher's own words. Use after every sealed claim (the first one creates it), when the user asks for a labbook or an account of the project, and when the labbook hook reports a missing step or a step without a claim.
+description: Keep the project's labbook — one step per claim, in the researcher's own words, as a LaTeX document rebuilt to PDF (labbook/) and, when the project publishes into a Library labbook, as a step there too. Use after a claim is sealed and published (the first one creates the labbook), when the researcher asks for the labbook or an account of the project, and when a `[labbook]` hook note reports a missing step, a step without a claim, or a failed build.
 ---
 
 # The labbook
 
-The ledger (`claims/`) is the record a machine can check. The labbook is
-the same project for a person: the steps in the order they were taken, why
-each came next, what it established, and what is still open — readable from
-start to finish, step by step, by someone who was not there.
+The ledger (`claims/`) is the record a machine checks. The labbook is the same
+project for a person: the steps in the order they were taken, why each came
+next, what it established, what is still open — readable by someone who was
+not there, and written so the researcher can walk anyone through it.
 
-**In a chat window?** Follow [references/chat.md](references/chat.md):
-there the labbook lives on berry.science, one step per claim, and
-berry.science renders the PDF. The same holds in a repository whose claims
-are published, when the researcher wants the labbook on berry.science
-(to read it there, or to share it with their team): the steps go to the
-Library as in chat mode, in the space the claims are in, and the link to
-give the researcher is `page_url`.
+**In a chat window**, follow [references/chat.md](references/chat.md): the
+labbook lives on berry.science and is kept with the MCP tools.
 
-**A step is a claim.** Each numbered section of `labbook.tex` shows a
-claim with `\claimbox`; `labbook.py check` fails on one that does not,
-and the hook says so. The labbook is not where notes from the session, a
-summary or a chapter about a phase go: those findings are claims, recorded
-first. What is not a finding goes, briefly, into where things stand, the
-open points, or the notes (below).
+## Hard rules
 
-## What it is made of
+- **A step is a claim.** Every numbered `\section` of `labbook.tex` shows one
+  claim with `\claimbox{<id>}`; `labbook.py check` fails otherwise. No step
+  without a claim. Findings go in as claims (skill `claims`), never as prose.
+- **Everything that states a result is generated** from the ledger: box,
+  figures, papers checked, conventions. Never copy a claim's title, statement,
+  numbers or figure into the prose; never redraw a figure. If prose and ledger
+  disagree, the prose is wrong.
+- **Notes** (`\section*{Notes}`, commented out in the template) hold only what
+  the researcher asks to have written down beyond the claims, once those
+  findings are claims. Tell them these are notes, not claims.
+- **History stays.** A step that turned out wrong keeps its place, with a
+  sentence pointing to the step that answered it.
 
-```
-labbook/
-├── labbook.tex        the steps, written by you, in the researcher's voice   committed
-├── voice.md           how the researcher writes                              committed
-├── berry-labbook.sty  the look                                               committed
-├── claims.gen.tex     claim boxes, figures, papers, conventions — generated  committed
-├── figures/           the claims' Vega-Lite figures, as PDF                  not committed
-└── build/, labbook.pdf                                                       not committed
-```
+## When
 
-Everything here is local: no account and no connection to berry.science
-are needed. Links to the Library appear in the boxes only for claims that
-were published.
+After a claim is sealed — and published, when the project publishes (the
+checker does both; skill `claims`) — start `labbook-writer` in the background
+with the claim id(s) (Claude Code: `berry:labbook-writer`; elsewhere a
+subagent given [references/labbook-writer.md](references/labbook-writer.md))
+and carry on. Where nothing runs in the background, follow that file yourself
+after answering. Never interrupt the researcher for it.
 
-The script is `scripts/labbook.py` in this skill (it reads the ledger with
-`record-claim`'s `claims.py`):
+**The first sealed claim creates the labbook**, without asking:
+`labbook.py init --title "<the project's question, in a few words>" --lang
+<en|de>` in the language of the researcher's messages, then fill
+`labbook/voice.md` from their own messages (language, register, their words,
+a few sentences of theirs quoted; don't ask them to check it). The author is
+`git config user.name`; `--author` only for a name the researcher stated.
+Tell them in one line where the PDF is.
 
-| Command | |
-|---|---|
-| `init --title "…" [--author "…"] [--lang en\|de]` | Create `labbook/`, with `.gitignore` so only the sources are committed |
-| `gen` | Write `claims.gen.tex` from the ledger, render the figures |
-| `build` | `gen`, then LuaLaTeX → `labbook/labbook.pdf` |
-| `check` | What `labbook.tex` names that does not exist, and sealed claims it does not show yet |
+**In a Library labbook too.** If `claims.py where` shows a labbook, the step
+also goes there with the Berry MCP server's `add_labbook_step` — only the
+step's prose; the Library adds the claim box and builds its own PDF. The local
+`labbook/` and its PDF stay as they are.
 
-**Everything that states a result is generated.** You never copy a
-claim's title, statement, numbers or figure into `labbook.tex`; you place
-it:
+## Where things are
 
-| In labbook.tex | Shows |
-|---|---|
-| `\claimbox{<id>}` | The claim: title, statement, holds-when, conventions, what it rests on (with the verdict of each paper checked), sealed or draft, links to the ledger and to the Library |
-| `\claimfigures{<id>}` / `\claimfigure{<id>}{<n>}` | Its figures / evidence item n |
-| `\sourcebox{sources/…json}` | A paper checked: the passage, the verdict, the summary |
-| `\claimref{<id>}` | A link to a claim shown elsewhere |
-| `\berryoverview`, `\berryconventions` | The list of claims; the conventions with every version and why it changed |
+`labbook/` sits beside the project's `claims/` — at the top of the repository,
+or in the project's own folder when one repository holds several (the scripts
+and the hook use the nearest ledger above; `--root <project folder>` names
+it). Commit `labbook.tex`, `voice.md`, `berry-labbook.sty`, `claims.gen.tex`
+with your next commit; never the PDF, `build/` or `figures/` unless asked.
 
-So the labbook cannot say something the ledger does not, and a claim
-re-published or a review added shows up without touching the prose.
+`scripts/labbook.py` (`-h` for all): `init`, `gen` (claims.gen.tex and
+figures from the ledger), `build` (gen, then LuaLaTeX → `labbook/labbook.pdf`),
+`check` (unknown names, steps without a claim, sealed claims not yet shown).
+In `labbook.tex`: `\claimbox{<id>}`, `\claimfigures{<id>}`,
+`\claimfigure{<id>}{<n>}`, `\sourcebox{sources/….json}`, `\claimref{<id>}`,
+`\berryoverview`, `\berryconventions`.
 
-## Automatic PDF
+With the plugin, a hook rebuilds the PDF after edits to `claims/` or
+`labbook/` and after `claims.py seal|published|index|conv|source`; it speaks
+(`[labbook] …`) only when the build failed or sealed claims lack a step.
+Without it, run `labbook.py build` yourself. Needs LuaLaTeX (TeX Live,
+MacTeX); figures need `vl-convert-python`, fetched through `uv` if missing.
 
-With the `berry` plugin installed (Claude Code or Codex), a hook rebuilds the PDF in the
-background after every edit to `labbook/` or `claims/` and after every
-`claims.py seal`, `published`, `index`, `conv` or `source` command. It is
-silent when the build works. You hear from it on your next turn only when
-LaTeX failed (fix `labbook.tex` — the previous PDF stays in place) or when
-a claim was sealed that the labbook does not show yet.
+## Building where the researcher looks
 
-Without the plugin, run `labbook.py build` yourself after each change.
-It needs a TeX distribution with LuaLaTeX (TeX Live, MacTeX); figures need
-`vl-convert-python`, which `labbook.py` fetches through `uv` if it is not
-installed.
-
-## Figures
-
-A claim's figure is its Vega-Lite spec, which the Library draws on the web
-and `labbook.py gen` renders to PDF for the labbook. Never redraw a claim's
-figure for the labbook: it must show what the claim shows.
-
-## After every claim
-
-**The first sealed claim creates the labbook.** If `labbook/` does not
-exist when a claim is sealed, create it then, without asking — with the
-title and language from the first claim's setup message (skill
-`record-claim`), or your proposal if they did not answer: `labbook.py
-init --title "<the project's question, in a few words>" --lang <en|de>`,
-in the language of the researcher's messages, and fill `labbook/voice.md`
-from their messages. The author is `git config user.name`; give `--author`
-only for a name the researcher stated — never a guess. With the
-plugin, the labbook hook says so when a claim is sealed and there is no
-labbook. Tell the researcher in one line where the PDF is.
-
-Every sealed claim gets its step. This is the moment to do it — and it
-runs beside the work, not in place of it: start a background agent with
-[references/labbook-writer.md](references/labbook-writer.md) as its
-instructions (in Claude Code: `berry:labbook-writer`) and the claim id(s),
-or write the step yourself if the researcher is waiting for nothing else.
-
-**A step** is a `\section` whose title says what the step found, then:
-
-1. **Why this step**: the question it answered, and why it came next —
-   what the previous step left open. One short paragraph.
-2. **What was done**: the method in plain words, what was held fixed, and
-   any paper it rests on (`\sourcebox` for the passage checked).
-3. `\claimbox{<id>}` and `\claimfigures{<id>}`.
-4. **What it means**: for the question, and for the next step. Say plainly
-   when a step was a dead end; negative results are steps.
-
-Then update the top and the end:
-
-- **Where things stand** (`\section*{Stand}` / `Where things stand`):
-  rewrite its three or four sentences.
-- **Open points and follow-up questions** — after the steps, before any
-  notes, never removed: what is not settled, what to try next, the questions to
-  discuss. Strike nothing silently: an answered question moves into the
-  step that answered it.
-
-- **Notes** (`\section*{Notes}` / `Notizen`, commented out in the
-  template, after the open points): only what the researcher explicitly
-  asks to have written down beyond the claims — context, decisions,
-  remarks. Written after the findings it touches are recorded as claims,
-  never in place of one; tell the researcher these are notes, not claims.
-
-A step's three paragraphs are a few sentences each: the box carries the
-claim.
-
-Finish with `labbook.py check` (no errors; every step shows a claim; every
-sealed claim shown). Commit `labbook/` — `labbook.tex`, `voice.md`,
-`claims.gen.tex` — with the claim when you wrote the step yourself; a
-step written in the background is committed with your next commit. Never
-commit the PDF or `figures/` unless the researcher asks.
-
-## The researcher's voice
-
-The labbook is theirs. Write it as they write, so they can walk
-anyone through it without rephrasing:
-
-- **`labbook/voice.md` first.** Read it before writing a step. When it is
-  still the template, fill it in from the researcher's own messages in
-  this conversation: the language they write in, their register (*wir*,
-  short sentences, or formal), their words for the system, the methods and
-  the quantities, and two to five sentences of theirs quoted verbatim. Do
-  not ask them to check it. Update it when you learn more.
-- The same language as the researcher's messages — `init --lang de` for
-  German headings and box labels; English otherwise.
-- Their terms, not yours: if they say *Residuum*, the labbook says
-  *Residuum*. No agent vocabulary (*claim ledger*, *evidence item*,
-  *seal*) in the prose; the boxes carry that.
-- Plain and precise. No hedging, no praise, no *"successfully"*. Numbers
-  only from the claims.
-
-## Rules
-
-- **The ledger is the truth.** If the labbook and a claim disagree, the
-  labbook is wrong: fix the prose.
-- **Drafts may appear**, marked as drafts by their box, while the
-  researcher discusses them; a step built on a draft says so.
-- **Do not rewrite history.** A step that turned out wrong stays, with a
-  sentence pointing to the step that corrected it.
+- **The researcher's PDF is in the main checkout.** A build in a git worktree
+  makes a PDF nobody opens: once the step is merged, run `labbook.py --root
+  <the project folder in the main checkout> build` (`git worktree list`, first
+  line).
+- **A failed build is reported plainly**: that it failed, LaTeX's error line,
+  and that the previous PDF is still there. Fix what is yours — math in a
+  `\section` title breaks it; write the title in words. A missing TeX package
+  is the researcher's to install (`tlmgr install <package>`): say which, and
+  don't work around it by editing `berry-labbook.sty`.

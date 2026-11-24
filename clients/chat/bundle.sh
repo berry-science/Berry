@@ -20,7 +20,7 @@ rm -rf "$out"
 mkdir -p "$out/skills" "$out/project/upload"
 
 # The skills that work in a chat: each routes to its references/chat.md.
-skills="research-monitoring recall publish-claim check-claims review-source conventions labbook"
+skills="claims recall check-claims review-source conventions labbook"
 
 for skill in $skills; do
   (cd "$repo/skills" && zip -qr "$out/skills/$skill.zip" "$skill" -x "*/__pycache__/*" "*.pyc")

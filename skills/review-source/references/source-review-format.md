@@ -1,22 +1,12 @@
 # A source review: format
 
-One file per review, in the ledger, under the paper it reviews:
-
-```
-claims/
-└── sources/
-    └── arxiv-2502.09437/                 the paper's key, as a folder name
-        ├── 2026-10-12-eq-12.json         one passage, for one use
-        └── 2026-10-14-table-ii.json
-```
-
-`claims.py source new <paper> --locator "…"` creates the file with every
-field present and empty, and prints its path. The paper may be given as
-`arxiv:2502.09437v2`, `doi:10.…`, or an arxiv.org / doi.org link: the
-review is filed under the paper's **key** — arXiv without the version,
-DOI in lower case — and the version goes into `source_version`. This is the
-same key berry.science files reviews under, so a review published from
-here lands beside everyone else's reviews of the same paper.
+One file per passage and use, under the paper's key:
+`claims/sources/arxiv-2502.09437/2026-10-12-eq-12.json`.
+`claims.py source new <paper> --locator "…"` creates it with every field
+present and prints its path. The paper may be given as `arxiv:…v2`,
+`doi:10.…`, or an arxiv.org / doi.org link; it is filed under its **key**
+(arXiv without the version, DOI in lower case — the key berry.science files
+reviews under), and the version read goes into `source_version`.
 
 ## The file
 
@@ -68,25 +58,20 @@ here lands beside everyone else's reviews of the same paper.
 | `correction` | for a corrected passage | `{"local": "<claim id>"}`: the claim carrying the corrected version. |
 | `reviewer` | | `agent` (with the exact model id), `human` (who also checked it, if anyone). |
 | `date` | | When the review was done. |
-| `library` | set by `source published` | The Library id and the paper's page. Outside the seal of citing claims. |
+| `library` | set by `claims.py publish` (or `source published`) | The Library id and the paper's page. Outside the seal of citing claims. |
 
 ## Citing it from a claim
 
-A citation of the paper names the passage and the review:
+In `claim.md`'s `## Cites`, the passage and the review:
 
-```json
-{"external": "arxiv:2502.09437v2", "relation": "uses", "locator": "Eq. (12)",
- "review": "sources/arxiv-2502.09437/2026-10-12-eq-12.json", "reason": "…"}
+```
+- uses arxiv:2502.09437v2 at "Eq. (12)" review sources/arxiv-2502.09437/2026-10-12-eq-12.json — The trap frequency, after the 2π correction.
 ```
 
-`claims.py check` then:
-
-- refuses a review of another paper, and a claim that `uses`, `extends` or
-  `replicates` a passage whose review `fails`;
-- warns when the verdict is `holds_with_correction` and the claim does not
-  also cite the correction claim, and when it is `could_not_check`;
-- warns on any claim that `uses` a `doi:` or `arxiv:` work without a
-  `locator` or without a review.
-
-The citing claim's seal covers the review's content (not its `library`
-field): changing the review afterward fails `check`.
+`claims.py check` then refuses a review of another paper, and a claim that
+`uses`, `extends` or `replicates` a passage whose review `fails`; it warns
+when a `holds_with_correction` review's correction claim is not also cited,
+on `could_not_check`, and on any claim that `uses` a `doi:` or `arxiv:` work
+without a `locator` or a review. The citing claim's seal covers the
+review's content (not its `library` field): changing it afterward fails
+`check`.

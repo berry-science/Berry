@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills" / "formalize-derivation" / "scripts"
 LEDGER = ROOT / "tests" / "fixtures" / "formalize-derivation" / "claims"
 CID = "2026-10-13-gaussian-beam-paraxial-mode-checks"
-sys.path.insert(0, str(ROOT / "skills" / "record-claim" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
 sys.path.insert(0, str(SCRIPTS))
 
 import claims  # noqa: E402

@@ -1,4 +1,4 @@
-"""Tests for skills/record-claim/scripts/claims.py.
+"""Tests for skills/claims/scripts/claims.py.
 
 Standard library only, like the script:
 
@@ -19,7 +19,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parents[1] / "skills" / "record-claim" / "scripts"
+SCRIPT_DIR = Path(__file__).resolve().parents[1] / "skills" / "claims" / "scripts"
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import claims  # noqa: E402
@@ -54,7 +54,7 @@ class LedgerTest(unittest.TestCase):
     # --- helpers ---------------------------------------------------------------
 
     def draft(self, title: str, statement: str, reasoning: str, **fields) -> str:
-        code, out, _ = run(self.root, "new", title, "--type", "result")
+        code, out, _ = run(self.root, "new", title, "--type", "result", "--json")
         self.assertEqual(code, 0)
         cid = out.splitlines()[0]
         folder = self.root / cid
@@ -93,7 +93,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_a_complete_claim_seals_and_then_checks_clean(self) -> None:
         cid = self.draft("Residual", "The residual is 31.1 um.", "Read off the log.")
-        code, out, _ = run(self.root, "seal", cid)
+        code, out, _ = run(self.root, "seal", cid, "--without-check")
         self.assertEqual(code, 0, out)
         self.assertEqual(self.load(cid)["status"], "sealed")
         code, out, _ = run(self.root, "check")
@@ -101,7 +101,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_a_sealed_claim_that_changes_fails_check(self) -> None:
         cid = self.draft("Residual", "The residual is 31.1 um.", "Read off the log.")
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         (self.root / cid / "evidence" / "02-output.txt").write_text("residual 3.11 um\n")
         code, out, _ = run(self.root, "check", cid)
         self.assertEqual(code, 1)
@@ -109,7 +109,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_editing_the_statement_after_sealing_also_breaks_the_seal(self) -> None:
         cid = self.draft("Residual", "The residual is 31.1 um.", "Read off the log.")
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         claim = self.load(cid)
         claim["statement"] = "The residual is small."
         self.save(claim)
@@ -119,7 +119,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_recording_the_library_id_does_not_break_the_seal(self) -> None:
         cid = self.draft("Residual", "The residual is 31.1 um.", "Read off the log.")
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         lib = "0d014a26-3904-444a-b99b-6d40988c18a2"
         self.assertEqual(run(self.root, "published", cid, lib)[0], 0)
         self.assertEqual(self.load(cid)["library"]["id"], lib)
@@ -127,7 +127,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_a_draft_with_errors_is_not_sealed(self) -> None:
         cid = self.draft("Residual", "", "Read off the log.")
-        code, out, _ = run(self.root, "seal", cid)
+        code, out, _ = run(self.root, "seal", cid, "--without-check")
         self.assertEqual(code, 1)
         self.assertIn("statement is missing", out)
         self.assertEqual(self.load(cid)["status"], "draft")
@@ -145,11 +145,11 @@ class LedgerTest(unittest.TestCase):
             "Compared with the base claim.",
             citations=[{"local": base, "relation": "uses", "reason": "the baseline"}],
         )
-        code, out, _ = run(self.root, "seal", top)
+        code, out, _ = run(self.root, "seal", top, "--without-check")
         self.assertEqual(code, 1)
         self.assertIn("still a draft", out)
-        run(self.root, "seal", base)
-        self.assertEqual(run(self.root, "seal", top)[0], 0)
+        run(self.root, "seal", base, "--without-check")
+        self.assertEqual(run(self.root, "seal", top, "--without-check")[0], 0)
 
     def test_citations_in_a_circle_are_an_error(self) -> None:
         a = self.draft("A", "The residual is 31.1 um.", "Log.")
@@ -191,8 +191,8 @@ class LedgerTest(unittest.TestCase):
             "Top", "The residual is 31.1 um.", "As in claim [1].",
             citations=[{"local": base, "relation": "uses", "reason": "the baseline"}],
         )
-        run(self.root, "seal", base)
-        run(self.root, "seal", top)
+        run(self.root, "seal", base, "--without-check")
+        run(self.root, "seal", top, "--without-check")
         code, _, err = run(self.root, "payload", top)
         self.assertEqual(code, 2)
         self.assertIn(f"Publish in this order: {base} {top}", err)
@@ -222,7 +222,7 @@ class LedgerTest(unittest.TestCase):
         self.save(claim)
         _, out, _ = run(self.root, "check", cid)
         self.assertNotIn("local_only", out)
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         payload = json.loads(run(self.root, "payload", cid)[1])
         self.assertEqual(len(payload["evidence"]), 2)  # reasoning and the short log
 
@@ -234,7 +234,7 @@ class LedgerTest(unittest.TestCase):
         self.assertIn("evidence/02-output.txt is ignored by git ('*.txt' in .gitignore:1)", out)
         self.assertIn("!claims/**", out)
         # Nor can it be sealed that way.
-        self.assertEqual(run(self.root, "seal", cid)[0], 1)
+        self.assertEqual(run(self.root, "seal", cid, "--without-check")[0], 1)
 
         (self.repo / ".gitignore").write_text("*.txt\n!claims/**\n")
         self.assertEqual(run(self.root, "check", cid)[0], 0)
@@ -325,7 +325,7 @@ class LedgerTest(unittest.TestCase):
         run(self.root, "conv", "add", "units", "Lengths in um.")
         cid = self.draft("Residual", "The residual is 31.1 um.", "Log.",
                          conventions=["units@1"])
-        self.assertEqual(run(self.root, "seal", cid)[0], 0)
+        self.assertEqual(run(self.root, "seal", cid, "--without-check")[0], 0)
         data = json.loads((self.root / "conventions.json").read_text())
         data["conventions"][0]["versions"][0]["statement"] = "Lengths in mm."
         (self.root / "conventions.json").write_text(json.dumps(data))
@@ -345,7 +345,7 @@ class LedgerTest(unittest.TestCase):
         run(self.root, "conv", "add", "units", "Lengths in um.", "--category", "units")
         cid = self.draft("Residual", "The residual is 31.1 um.", "Log.",
                          conventions=["units@1"])
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         payload = json.loads(run(self.root, "payload", cid)[1])
         self.assertEqual(
             payload["conventions"],
@@ -432,7 +432,7 @@ class LedgerTest(unittest.TestCase):
             citations=[{"external": "arxiv:2502.09437", "relation": "uses",
                         "locator": "Eq. (12)", "review": rel, "reason": "x"}],
         )
-        self.assertEqual(run(self.root, "seal", cid)[0], 0)
+        self.assertEqual(run(self.root, "seal", cid, "--without-check")[0], 0)
         lib = "22222222-2222-3333-4444-555555555555"
         self.assertEqual(run(self.root, "source", "published", rel, lib)[0], 0)
         self.assertEqual(run(self.root, "check", cid)[0], 0)
@@ -460,8 +460,8 @@ class LedgerTest(unittest.TestCase):
                  "locator": "Eq. (12)", "review": rel, "reason": "x"},
             ],
         )
-        run(self.root, "seal", fix)
-        self.assertEqual(run(self.root, "seal", top)[0], 0)
+        run(self.root, "seal", fix, "--without-check")
+        self.assertEqual(run(self.root, "seal", top, "--without-check")[0], 0)
         _, out, _ = run(self.root, "order", top)
         self.assertEqual(out.split(), [fix, rel, top])
 
@@ -498,8 +498,8 @@ class LedgerTest(unittest.TestCase):
             "Top", "The residual is 31.1 um.", "Log.",
             citations=[{"local": base, "relation": "uses", "reason": "x"}],
         )
-        run(self.root, "seal", base)
-        run(self.root, "seal", top)
+        run(self.root, "seal", base, "--without-check")
+        run(self.root, "seal", top, "--without-check")
         return base, top
 
     def status(self, *ids: str) -> str:
@@ -542,7 +542,7 @@ class LedgerTest(unittest.TestCase):
             citations=[{"external": "arxiv:2502.09437", "relation": "uses",
                         "locator": "Eq. (12)", "review": rel, "reason": "x"}],
         )
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         run(self.root, "audit", cid, "--clean", "--agent", "test")
         self.assertIn(f"current {cid}", self.status(cid))
         self.review("arxiv:2502.09437", "Eq. (13)", verdict="fails")
@@ -586,7 +586,7 @@ class LedgerTest(unittest.TestCase):
     def test_pending_lists_the_drafts_with_their_check(self) -> None:
         a = self.draft("A", "The residual is 31.1 um.", "Log.")
         b = self.draft("B", "", "Log.")
-        run(self.root, "seal", a)
+        run(self.root, "seal", a, "--without-check")
         _, out, _ = run(self.root, "pending")
         self.assertNotIn(a, out)
         self.assertIn(f"{b}  [1 error(s)", out)
@@ -622,7 +622,7 @@ class LedgerTest(unittest.TestCase):
             "The linear transport ramp leaves a residual oscillation of 31.1 um.",
             "Read off the log.",
         )
-        run(self.root, "seal", a)
+        run(self.root, "seal", a, "--without-check")
         b = self.draft(
             "Smooth transport ramp reduces the residual oscillation",
             "A smooth transport ramp reduces the residual oscillation below 31.1 um.",
@@ -649,7 +649,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_an_unrelated_draft_is_not_asked(self) -> None:
         a = self.draft("Residual", "The residual is 31.1 um.", "Log.")
-        run(self.root, "seal", a)
+        run(self.root, "seal", a, "--without-check")
         b = self.draft("Detector dark counts", "Dark counts are 31.1 per second.", "Log.")
         _, out, _ = run(self.root, "check", b)
         self.assertNotIn("cites no earlier claim", out)
@@ -675,7 +675,7 @@ class LedgerTest(unittest.TestCase):
 
     def test_sealed_claims_are_not_asked_again(self) -> None:
         cid = self.draft("Residual", "The residual is 31.1 um.", "Uses 52.3 Hz.")
-        run(self.root, "seal", cid)
+        run(self.root, "seal", cid, "--without-check")
         _, out, _ = run(self.root, "check", cid)
         self.assertNotIn("numbers in the reasoning", out)
 

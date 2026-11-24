@@ -41,8 +41,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE.parent / "templates"
-sys.path.insert(0, str(HERE.parents[1] / "record-claim" / "scripts"))
+sys.path.insert(0, str(HERE.parents[1] / "claims" / "scripts"))
 
+import berry_project  # noqa: E402  (which project, which ledger)
 import claims as ledger_tool  # noqa: E402  (the ledger's own reader)
 import hook_event  # noqa: E402  (Claude Code and Codex events alike)
 import labbook_core as core  # noqa: E402  (the generator, shared with the Library)
@@ -70,16 +71,14 @@ class LabbookError(Exception):
 # --- where things are --------------------------------------------------------------
 
 
-def project_root(start: Path) -> Path:
-    top = ledger_tool.git("rev-parse", "--show-toplevel", cwd=start)
-    return Path(top) if top else start
-
-
 class Labbook:
-    def __init__(self, root: Path):
+    """The labbook of the project at `root`: root/labbook, built from the
+    ledger (root/claims unless given)."""
+
+    def __init__(self, root: Path, ledger: Path | None = None):
         self.root = root
         self.dir = root / "labbook"
-        self.ledger = ledger_tool.Ledger(root / "claims")
+        self.ledger = ledger_tool.Ledger(ledger or root / "claims")
 
     @property
     def tex(self) -> Path:
@@ -100,6 +99,15 @@ class Labbook:
     @property
     def pdf(self) -> Path:
         return self.dir / "labbook.pdf"
+
+
+def find_labbook(start: Path | str | None) -> Labbook:
+    """The labbook of the project `start` (a folder or a file) belongs to:
+    the nearest folder up to the git root with a claims/ ledger or Berry
+    enabled, else the git root (berry_project.py). A repository can hold
+    several projects, each with its own claims/ and labbook/."""
+    project = berry_project.find_project(start)
+    return Labbook(project.root, project.ledger)
 
 
 # --- figures --------------------------------------------------------------------------------
@@ -432,7 +440,7 @@ def cmd_check(lb: Labbook, a: argparse.Namespace) -> int:
 # --- the hook ------------------------------------------------------------------------------
 
 # Bash commands that change what the labbook shows.
-LEDGER_COMMAND = re.compile(r"claims\.py\b.*\b(seal|published|index|conv|source)\b")
+LEDGER_COMMAND = re.compile(r"claims\.py\b.*\b(seal|publish|published|index|conv|source)\b")
 
 
 def relevant(lb: Labbook, event: dict[str, Any]) -> bool:
@@ -462,7 +470,7 @@ def say(text: str) -> None:
     }))
 
 
-def start_note(lb: Labbook) -> None:
+def start_note(lb: Labbook) -> str | None:
     """No labbook yet, and a claim is sealed: the labbook starts now. Said
     when the set of sealed claims changes, so not on every edit, and not
     again for the same claims."""
@@ -470,19 +478,23 @@ def start_note(lb: Labbook) -> None:
         cid for cid, c in lb.ledger.all().items() if c.get("status") == "sealed"
     )
     if not sealed:
-        return
-    git_dir = ledger_tool.git("rev-parse", "--absolute-git-dir", cwd=lb.root)
-    marker = Path(git_dir) / "berry-labbook-start" if git_dir else None
+        return None
+    top = berry_project.git_toplevel(lb.root) if lb.root.is_dir() else None
+    marker = berry_project.Project(
+        root=lb.root, ledger=lb.ledger.root, top=top, how="labbook"
+    ).state_file("berry-labbook-start") if top else None
     if marker and marker.is_file() and marker.read_text().split() == sealed:
-        return
+        return None
     if marker:
         try:
             marker.write_text(" ".join(sealed))
         except OSError:
             pass
-    say(
+    # A project below the top of the repository: name it, so init lands there.
+    where = f"--root {lb.root} " if top and lb.root.resolve() != top else ""
+    return (
         f"[labbook] {len(sealed)} claim(s) sealed, and this project has no "
-        "labbook yet. Create it now, without asking: labbook.py init "
+        f"labbook yet. Create it now, without asking: labbook.py {where}init "
         '--title "<the project\'s question, in a few words>" --lang <en|de: '
         "the language of their messages> (the author is git config "
         "user.name); "
@@ -493,6 +505,21 @@ def start_note(lb: Labbook) -> None:
     )
 
 
+def hook_labbooks(event: dict[str, Any]) -> list[Labbook]:
+    """The labbooks a tool call may have changed. Each edited file belongs
+    to the project its own folder is in — a session started at the root of
+    the repository that edits ramp_study/claims/... rebuilds
+    ramp_study/labbook/ — and a command to the project of the session's
+    directory."""
+    cwd = event.get("cwd") or os.getcwd()
+    starts: list[Path | str] = [p.parent for p in hook_event.edited_paths(event)] + [cwd]
+    found: dict[Path, Labbook] = {}
+    for start in starts:
+        lb = find_labbook(start)
+        found.setdefault(lb.root.resolve(), lb)
+    return list(found.values())
+
+
 def cmd_hook(lb_unused: Any, a: argparse.Namespace) -> int:
     """PostToolUse: rebuild the PDF when the ledger or the labbook changed.
     Silent when all is well; otherwise says what failed, and which sealed
@@ -501,18 +528,23 @@ def cmd_hook(lb_unused: Any, a: argparse.Namespace) -> int:
         event = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return 0
-    root = project_root(Path(event.get("cwd") or os.getcwd()))
-    lb = Labbook(root)
-    if not relevant(lb, event):
-        return 0
+    notes = [n for lb in hook_labbooks(event) if relevant(lb, event) for n in rebuild_after(lb)]
+    if notes:
+        say("\n".join(notes))
+    return 0
+
+
+def rebuild_after(lb: Labbook) -> list[str]:
+    """The hook's work for one project whose ledger or labbook changed: what
+    to tell the agent, if anything."""
     if not lb.tex.is_file():
-        start_note(lb)
-        return 0
+        note = start_note(lb)
+        return [note] if note else []
     try:
         problems = build(lb)
         errors, missing = check(lb)
     except LabbookError:
-        return 0
+        return []
     notes = []
     claimless = sorted(e for e in errors if NO_CLAIM in e)
     seen = lb.build_dir / ".claimless"
@@ -520,7 +552,7 @@ def cmd_hook(lb_unused: Any, a: argparse.Namespace) -> int:
         notes.append(
             "[labbook] " + "\n".join(claimless[:5])
             + "\nBerry records findings as claims; the labbook shows them. "
-            "Turn the prose into claims (skill record-claim), or move it out "
+            "Turn the prose into claims (skill claims), or move it out "
             "of the steps."
         )
     seen.parent.mkdir(parents=True, exist_ok=True)
@@ -548,9 +580,7 @@ def cmd_hook(lb_unused: Any, a: argparse.Namespace) -> int:
         )
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(" ".join(missing))
-    if notes:
-        say("\n".join(notes))
-    return 0
+    return notes
 
 
 def cmd_render(lb_unused: Any, a: argparse.Namespace) -> int:
@@ -562,7 +592,9 @@ def cmd_render(lb_unused: Any, a: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="labbook.py", description=__doc__.split("\n\n")[0])
-    p.add_argument("--root", help="the research repository (default: the git root)")
+    p.add_argument("--root", help="the project folder, where claims/ and labbook/ are "
+                   "(default: the nearest one up to the git root with a ledger, else "
+                   "the git root)")
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("init", help="create labbook/ with the template, voice.md and .gitignore")
@@ -587,9 +619,9 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.command in ("hook", "_render"):
         return a.run(None, a)
-    root = Path(a.root).resolve() if a.root else project_root(Path.cwd())
+    lb = Labbook(Path(a.root).resolve()) if a.root else find_labbook(Path.cwd())
     try:
-        return a.run(Labbook(root), a)
+        return a.run(lb, a)
     except (LabbookError, ledger_tool.LedgerError) as exc:
         print(f"labbook.py: {exc}", file=sys.stderr)
         return 2

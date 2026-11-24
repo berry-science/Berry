@@ -9,9 +9,11 @@ From the repository root, by claim id (one command, no cd):
     formalize.py lock <claim-id>               # the script's uv lockfile
     formalize.py cover <claim-id>              # the coverage check
 
-The ledger is found as claims.py finds it: --root, else $BERRY_CLAIMS_DIR,
-else claims/ at the top of the git repository, else ./claims. The path
-forms still work:
+The ledger is found as claims.py finds it (the claims skill's
+berry_project.py): --root, else $BERRY_CLAIMS_DIR, else the nearest
+project's claims/ walking up from here to the top of the git repository
+(one project of a repository that holds several), else claims/ at the top.
+The path forms still work:
 
     formalize.py run claims/<id>/evidence/03-code.py --out claims/<id>/evidence/04-output.txt
     formalize.py export claims/<id>/evidence/04-output.txt <result> claims/<id>/evidence/05-data.json
@@ -45,6 +47,14 @@ sys.path.insert(0, str(HERE))
 import derivfmt  # noqa: E402
 import derivlint  # noqa: E402
 
+# The ledger lookup claims.py and the hooks use, from the claims skill beside
+# this one. Without it (this skill installed alone), the old rule below.
+sys.path.insert(0, str(HERE.parents[1] / "claims" / "scripts"))
+try:
+    import berry_project  # noqa: E402
+except ImportError:  # pragma: no cover - only without the claims skill
+    berry_project = None
+
 
 def _env(script: Path, against: str | None, mutants: bool, runner: str) -> dict[str, str]:
     env = dict(os.environ)
@@ -77,6 +87,8 @@ class Usage(Exception):
 
 
 def _ledger_root(given: str | None) -> Path:
+    if berry_project is not None:
+        return berry_project.find_ledger(Path.cwd(), given).resolve()
     if given:
         return Path(given).resolve()
     if os.environ.get("BERRY_CLAIMS_DIR"):
@@ -362,7 +374,11 @@ def cmd_cover(a: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="formalize.py", description=__doc__.split("\n\n")[0])
-    p.add_argument("--root", help="the ledger folder (default: claims/ at the git root)")
+    p.add_argument(
+        "--root",
+        help="the ledger folder (default: the nearest project's claims/, "
+        "as claims.py finds it)",
+    )
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("run", help="run a claim's check script (by claim id), or a script by path")

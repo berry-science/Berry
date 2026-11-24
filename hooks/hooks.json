@@ -22,7 +22,7 @@
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/research-monitoring/scripts/watch.py\" remind",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/claims/scripts/watch.py\" remind",
             "timeout": 5
           }
         ]
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/research-monitoring/scripts/watch.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/claims/scripts/watch.py\"",
             "timeout": 10
           }
         ]

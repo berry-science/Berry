@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "skills" / "record-claim" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
 sys.path.insert(0, str(ROOT / "skills" / "recall" / "scripts"))
 
 import claims  # noqa: E402
@@ -169,7 +169,7 @@ class OverviewHookTest(LedgerFixture):
         for cid in CLAIMS:
             self.assertIn(cid, context)
         self.assertIn("Extra 59", context)
-        self.assertIn("Drafts waiting for the researcher to agree (1): 2026-10-12-noise-budget", context)
+        self.assertIn("Drafts not yet sealed (1; claims.py pending says why): 2026-10-12-noise-budget", context)
 
     def test_silent_without_a_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as other:

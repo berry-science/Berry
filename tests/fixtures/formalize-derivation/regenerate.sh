@@ -10,4 +10,4 @@ python3 "$scripts/formalize.py" --root "$here/claims" run "$id" > /dev/null
 grep -v '^{' "$ev/04-output.txt" > "$ev/05-output.txt"
 python3 "$scripts/formalize.py" --root "$here/claims" export "$id" inverse_q
 python3 "$scripts/formalize.py" --root "$here/claims" export "$id" w_near_waist
-python3 "$here/../../../skills/record-claim/scripts/claims.py" --root "$here/claims" check
+python3 "$here/../../../skills/claims/scripts/claims.py" --root "$here/claims" check

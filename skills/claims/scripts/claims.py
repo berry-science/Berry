@@ -12,6 +12,11 @@ folder in it, named by its id:
         evidence/02-figure.vl.json
         ...
 
+A claim is written as `claim.md` — a short header, the reasoning, and the
+evidence as paths to files that already exist — which `check` and `seal`
+compile into `claim.json` and `evidence/` (see "claim.md" below). Writing
+`claim.json` and the evidence files by hand (`new --json`) works as before.
+
 A claim starts as a draft. `seal` freezes it: the claim and every evidence
 file are hashed, and from then on `check` fails if any of it changes. A
 sealed claim is never edited; a wrong one is answered by a new claim that
@@ -42,8 +47,10 @@ Standard library only; Python 3.9+. Run `claims.py -h` for the commands.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import hashlib
+import io
 import json
 import os
 import re
@@ -155,9 +162,11 @@ def git(*args: str, cwd: Path) -> str | None:
     return out.stdout.strip()
 
 
-def ignored_by_git(paths: list[Path], cwd: Path) -> dict[Path, str]:
+def ignored_by_git(paths: list[Path], cwd: Path) -> dict[Path, tuple[str, str]]:
     """Which of `paths` git would leave out of a commit, each with the rule
-    that does it ("*.txt in .gitignore:3"). Only untracked files are
+    that does it ("*.txt in .gitignore:3") and the file that holds the rule,
+    as git names it (relative to the top of the repository, or absolute for
+    a global excludes file). Only untracked files are
     reported: one already committed, or added with `git add -f`, is kept.
     Empty outside a git repository."""
     if not paths:
@@ -184,8 +193,34 @@ def ignored_by_git(paths: list[Path], cwd: Path) -> dict[Path, str]:
         # which is what re-includes them: those are not ignored.
         if pattern.startswith("!"):
             continue
-        found[(cwd / path).resolve()] = f"{pattern!r} in {source}:{number}"
+        found[(cwd / path).resolve()] = (f"{pattern!r} in {source}:{number}", source)
     return found
+
+
+def negation_for(ledger_root: Path, source: str) -> tuple[str, str]:
+    """(the line that re-includes the ledger, the file it goes in). A
+    gitignore pattern with a slash is relative to the folder of the file
+    that holds it, so for a ledger below the top (one project of several)
+    `!claims/**` in the top .gitignore would re-include nothing: the line
+    names the ledger from that file's folder. A rule from .git/info/exclude
+    or a global excludes file is answered in the top .gitignore."""
+    top = git("rev-parse", "--show-toplevel", cwd=ledger_root)
+    top_dir = Path(top).resolve() if top else ledger_root.parent.resolve()
+    src = Path(source)
+    if src.is_absolute() or src.parts[:1] == (".git",):
+        holder = top_dir / ".gitignore"
+    else:
+        holder = (top_dir / src).resolve()
+    try:
+        rel = ledger_root.resolve().relative_to(holder.parent).as_posix()
+    except ValueError:  # a rule from a .gitignore outside the ledger's path
+        holder = top_dir / ".gitignore"
+        rel = ledger_root.resolve().relative_to(top_dir).as_posix()
+    try:
+        shown = holder.relative_to(top_dir).as_posix()
+    except ValueError:
+        shown = str(holder)
+    return f"!{rel}/**", shown
 
 
 def commit_state(repo: Path, commit: str) -> str:
@@ -218,14 +253,18 @@ def commit_state(repo: Path, commit: str) -> str:
 
 
 def ledger_root(given: str | None) -> Path:
-    """`--root`, else $BERRY_CLAIMS_DIR, else claims/ at the top of the git
-    repository the command runs in, else ./claims."""
+    """`--root`, else $BERRY_CLAIMS_DIR, else the nearest project's claims/
+    walking up from here to the git toplevel, else claims/ at the toplevel
+    (./claims outside git). The same walk the hooks use: berry_project.py.
+    A new ledger is created where this points."""
     if given:
         return Path(given).resolve()
-    if os.environ.get("BERRY_CLAIMS_DIR"):
-        return Path(os.environ["BERRY_CLAIMS_DIR"]).resolve()
-    top = git("rev-parse", "--show-toplevel", cwd=Path.cwd())
-    return (Path(top) if top else Path.cwd()) / "claims"
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import berry_project
+
+    return berry_project.find_ledger(Path.cwd(), given)
 
 
 class Ledger:
@@ -405,6 +444,10 @@ def seal_of(ledger: Ledger, claim: dict[str, Any]) -> str:
     )
     if reviewed:
         core["_reviews"] = {rel: review_digest(ledger, rel) for rel in reviewed}
+    # A claim written as claim.md: that file's hash and where each evidence
+    # file was copied from.
+    if claim.get("compiled_from"):
+        core["compiled_from"] = claim["compiled_from"]
     h = hashlib.sha256(
         json.dumps(core, sort_keys=True, ensure_ascii=False).encode("utf-8")
     )
@@ -761,6 +804,8 @@ def check_claim(
                     "with relation 'refutes' or 'extends'",
                 )
 
+    check_compiled_from(ledger, claim, r)
+
     # A derivation's executable check, if the formalize-derivation skill is installed.
     check_derivation(ledger, claim, r)
 
@@ -973,6 +1018,8 @@ def claim_files(ledger: Ledger, claim: dict[str, Any]) -> list[Path]:
     """The files that make up a claim: claim.json and its evidence files."""
     folder = ledger.path(claim["id"])
     files = [folder / "claim.json"]
+    if (folder / CLAIM_MD).is_file():
+        files.append(folder / CLAIM_MD)
     for item in claim.get("evidence") or []:
         if "file" in item and (folder / item["file"]).is_file():
             files.append(folder / item["file"])
@@ -982,6 +1029,8 @@ def claim_files(ledger: Ledger, claim: dict[str, Any]) -> list[Path]:
             files.append(ledger.root / c["review"])
     if claim.get("conventions") and ledger.conventions_file.is_file():
         files.append(ledger.conventions_file)
+    if (folder / CHECKS_FILE).is_file():
+        files.append(folder / CHECKS_FILE)
     return [f.resolve() for f in files]
 
 
@@ -995,8 +1044,7 @@ def check_ignored(
         return
     owner = {f: c["id"] for c in chosen for f in claim_files(ledger, c)}
     hits = ignored_by_git(list(owner), ledger.root)
-    rel = ledger.root.name
-    for path, rule in sorted(hits.items()):
+    for path, (rule, source) in sorted(hits.items()):
         cid = owner.get(path)
         if cid is None:
             continue
@@ -1006,11 +1054,12 @@ def check_ignored(
             if folder in path.parents
             else path.relative_to(ledger.root.resolve())
         )
+        line, holder = negation_for(ledger.root, source)
         r.error(
             cid,
             f"{name} is ignored by git ({rule}), so it would never be "
-            f"committed. Add the line `!{rel}/**` to that .gitignore, after "
-            "the rule (or commit the file with `git add -f`)",
+            f"committed. Add the line `{line}` to {holder}, after the rule "
+            "(or commit the file with `git add -f`)",
         )
 
 
@@ -1036,10 +1085,18 @@ def check_conventions(ledger: Ledger, r: Report) -> None:
 
 
 def check(ledger: Ledger, only: list[str] | None = None) -> Report:
+    """Check claims, compiling each draft written as claim.md first. A draft
+    whose claim.md does not compile is reported with its errors only."""
+    failed = compile_drafts(ledger, only)
     claims = ledger.all()
     r = Report()
     chosen = []
+    for cid, errors in failed.items():
+        for text in errors:
+            r.error(cid, text)
     for cid in only or claims:
+        if cid in failed:
+            continue
         if cid.startswith("sources/"):
             review = ledger.source_review(cid)
             if review is None:
@@ -1062,6 +1119,760 @@ def check(ledger: Ledger, only: list[str] | None = None) -> Report:
     for loop in cycles(claims):
         r.error(loop[0], "citations go in a circle: " + " -> ".join(loop))
     return r
+
+
+# --- claim.md: the short form an agent writes ------------------------------------
+#
+# A claim can be written as one Markdown file, claims/<id>/claim.md, instead
+# of claim.json plus hand-made evidence files:
+#
+#     ---
+#     title: …
+#     statement: …
+#     type: result
+#     ---
+#
+#     The reasoning (becomes evidence/01-reasoning.md), citing [1], [2].
+#
+#     ## Evidence
+#     - output: runs/2026-11-08/sta.log — Run log, verbatim.
+#
+#     ## Cites
+#     - uses commit — The code that produced every number here.
+#
+# `compile_claim_md` turns it into claim.json and evidence/ exactly as the
+# ledger has them, copying each evidence file and recording where it came
+# from and its hash under `compiled_from` — so every other command reads
+# claim.json as before. Drafts are compiled again by `check`, `seal` and
+# `pending`; a sealed claim never is, and `check` reports a claim.md (or a
+# source file) changed after sealing. The copies in evidence/ stay the
+# record. references/claim-format.md describes the format.
+
+CLAIM_MD = "claim.md"
+MD_HEADER_KEYS = {
+    "title": "title",
+    "statement": "statement",
+    "type": "claim_type",
+    "claim_type": "claim_type",
+    "holds_when": "holds_when",
+    "conventions": "conventions",
+    "contributors": "contributors",
+    "anchors": "anchors",
+    "command": "command",
+    "commit": "commit",
+    "repository": "repository",
+    "repository_path": "repository_path",
+}
+MD_LIST_KEYS = {"conventions", "contributors", "anchors"}
+MD_SECTIONS = {"evidence": "evidence", "cites": "cites", "citations": "cites"}
+# Between the head of an item and its caption or reason: an em dash, an en
+# dash, "--" or "-", with a space on each side.
+MD_SEPARATOR = re.compile(r"\s+(?:—|–|--|-)\s+")
+MD_QUOTES = {'"': '"', "“": "”", "`": "`"}
+LIBRARY_ID = re.compile(r"^[0-9a-f-]{36}$")
+FULL_HASH = re.compile(r"^[0-9a-f]{40}$")
+
+# Kind, format and language from a file's name, where the name says it.
+CODE_LANGUAGES = {
+    ".py": "python", ".jl": "julia", ".m": "matlab", ".r": "r", ".c": "c",
+    ".h": "c", ".cc": "cpp", ".cpp": "cpp", ".hpp": "cpp", ".rs": "rust",
+    ".f90": "fortran", ".f": "fortran", ".sh": "bash", ".js": "javascript",
+    ".ts": "typescript", ".go": "go", ".java": "java", ".nb": "mathematica",
+    ".wl": "mathematica", ".toml": "toml", ".yaml": "yaml", ".yml": "yaml",
+}
+KIND_BY_SUFFIX = {
+    ".vl.json": "figure", ".log": "output", ".txt": "output", ".out": "output",
+    ".tex": "derivation", ".csv": "data", ".tsv": "data",
+    **{s: "code" for s in CODE_LANGUAGES if s not in (".toml", ".yaml", ".yml")},
+}
+FORMAT_BY_SUFFIX = {
+    ".vl.json": "vega-lite", ".json": "json", ".md": "markdown", ".tex": "latex",
+    ".csv": "csv", ".tsv": "tsv",
+}
+
+
+def _md_suffix(name: str) -> str:
+    """The part of a file name that says what it is: ".vl.json",
+    ".py.lock", else the last suffix ("" for none)."""
+    lower = name.lower()
+    if lower.endswith(".vl.json"):
+        return ".vl.json"
+    suffixes = Path(lower).suffixes
+    if lower.endswith(".lock") and len(suffixes) >= 2:
+        return "".join(suffixes[-2:])
+    return suffixes[-1] if suffixes else ""
+
+
+def _md_split_reason(text: str) -> tuple[str, str | None]:
+    """'head — reason' -> (head, reason): the first separator outside quotes."""
+    close = None
+    for i, ch in enumerate(text):
+        if close:
+            if ch == close:
+                close = None
+        elif ch in MD_QUOTES:
+            close = MD_QUOTES[ch]
+        else:
+            m = MD_SEPARATOR.match(text, i)
+            if m and ch.isspace():
+                return text[:i], text[m.end():].strip()
+    return text, None
+
+
+def _md_tokens(text: str) -> list[tuple[str, str]]:
+    """Words, and "quoted" or `quoted` stretches as one word: [(value, quote)]."""
+    tokens, i = [], 0
+    while i < len(text):
+        ch = text[i]
+        if ch.isspace():
+            i += 1
+        elif ch in MD_QUOTES:
+            end = text.find(MD_QUOTES[ch], i + 1)
+            if end < 0:
+                raise ValueError(f"the quote {ch} opened here is never closed")
+            tokens.append((text[i + 1 : end], ch))
+            i = end + 1
+        else:
+            m = re.compile(r"\S+").match(text, i)
+            tokens.append((m.group(0), ""))
+            i = m.end()
+    return tokens
+
+
+def _md_list(value: str) -> list[str]:
+    """'a, b (c, d), e' -> ['a', 'b (c, d)', 'e']: commas inside brackets stay."""
+    parts, depth, cur = [], 0, ""
+    for ch in value:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    parts.append(cur)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def parse_claim_md(text: str) -> tuple[dict[str, Any], list[tuple[int, str]]]:
+    """Read claim.md. Returns what it says and the errors, each with its
+    line number. Nothing here looks at the file system."""
+    lines = text.splitlines()
+    errors: list[tuple[int, str]] = []
+    out: dict[str, Any] = {"header": {}, "reasoning": "", "reasoning_line": 1,
+                           "evidence": [], "cites": []}
+    keys = ", ".join(k for k in MD_HEADER_KEYS if k != "claim_type")
+
+    # The header: between a first line '---' and the next '---'.
+    if not lines or lines[0].strip() != "---":
+        errors.append((1, "claim.md starts with a header: a line '---', then "
+                          f"'key: value' lines ({keys}), then '---'"))
+        return out, errors
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        errors.append((1, "the header opened here is never closed: add a line "
+                          "'---' after its last field"))
+        return out, errors
+    header: dict[str, list] = {}
+    last = None
+    for i in range(1, end):
+        line, n = lines[i], i + 1
+        if not line.strip():
+            last = None
+            continue
+        if line[0].isspace():
+            if last is None:
+                errors.append((n, "an indented line continues the field above it, "
+                                  "but there is none: start it with 'key: '"))
+            else:
+                header[last][0] = (header[last][0] + " " + line.strip()).strip()
+            continue
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:(.*)$", line)
+        if not m:
+            errors.append((n, f"expected 'key: value' (keys: {keys}); a long "
+                              "value continues on lines indented by a space"))
+            last = None
+            continue
+        key, value = m.group(1).lower().replace("-", "_"), m.group(2).strip()
+        if key not in MD_HEADER_KEYS:
+            errors.append((n, f"unknown key {m.group(1)!r}: the keys are {keys}"))
+            last = None
+            continue
+        field = MD_HEADER_KEYS[key]
+        if field in header:
+            errors.append((n, f"{key} is given twice (first on line "
+                              f"{header[field][1]}): keep one"))
+            last = None
+            continue
+        if value in (">", "|", ">-", "|-"):
+            errors.append((n, f"{key}: write the value after the colon, and "
+                              "continue it on lines indented by a space (this is "
+                              "not YAML)"))
+            last = None
+            continue
+        header[field] = [value, n]
+        last = field
+    for field, (value, n) in header.items():
+        if field == "claim_type" and value and value not in CLAIM_TYPES:
+            errors.append((n, f"type {value!r} is not one of "
+                              + ", ".join(sorted(CLAIM_TYPES))))
+        if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+            errors.append((n, f"{field} is wrapped in quotes: values are plain "
+                              "text, drop the quotes"))
+    out["header"] = {
+        f: (_md_list(v) if f in MD_LIST_KEYS else v, n) for f, (v, n) in header.items()
+    }
+
+    # The body: reasoning up to the first '## Evidence' or '## Cites'.
+    reasoning: list[str] = []
+    section, seen, fence, comment = None, {}, None, False
+    items: list[dict[str, Any]] = []
+    for i in range(end + 1, len(lines)):
+        line, n = lines[i], i + 1
+        stripped = line.strip()
+        if section is None:
+            if fence:
+                if stripped.startswith(fence):
+                    fence = None
+                reasoning.append(line)
+                continue
+            if comment:
+                comment = "-->" not in line
+                continue
+            if stripped.startswith("<!--"):
+                comment = "-->" not in stripped
+                continue
+            m = re.match(r"^(```|~~~)", stripped)
+            if m:
+                fence = m.group(1)
+                reasoning.append(line)
+                continue
+        heading = re.match(r"^##\s+(.+?)\s*#*\s*$", line)
+        name = heading.group(1).strip().lower() if heading else None
+        if name in MD_SECTIONS:
+            name = MD_SECTIONS[name]
+            if name in seen:
+                errors.append((n, f"a second '## {heading.group(1)}' (the first is "
+                                  f"on line {seen[name]}): put all items under one"))
+            seen[name] = n
+            section = name
+            continue
+        if section is None:
+            reasoning.append(line)
+            continue
+        if not stripped or stripped.startswith("<!--"):
+            continue
+        if heading or line.startswith("#"):
+            errors.append((n, "only '## Evidence' and '## Cites' come after the "
+                              "reasoning: move this heading and its text above them"))
+            continue
+        if line[0].isspace() and items and items[-1]["section"] == section:
+            items[-1]["text"] += " " + stripped
+            continue
+        m = re.match(r"^[-*]\s+(.*)$", line)
+        if not m:
+            errors.append((n, f"under '## {section.capitalize()}' every line is an "
+                              "item starting with '- ' (or an indented line "
+                              "continuing the one above)"))
+            continue
+        items.append({"section": section, "line": n, "text": m.group(1).strip()})
+    while reasoning and not reasoning[0].strip():
+        reasoning.pop(0)
+    while reasoning and not reasoning[-1].strip():
+        reasoning.pop()
+    out["reasoning"] = "\n".join(reasoning) + "\n" if reasoning else ""
+    out["reasoning_line"] = end + 2
+
+    for item in items:
+        try:
+            if item["section"] == "evidence":
+                out["evidence"].append(_md_evidence(item["text"], item["line"]))
+            else:
+                out["cites"].append(_md_cite(item["text"], item["line"]))
+        except ValueError as exc:
+            errors.append((item["line"], str(exc)))
+    return out, errors
+
+
+def _md_evidence(text: str, n: int) -> dict[str, Any]:
+    """'[kind:] path [local-only] [— caption]'."""
+    head, caption = _md_split_reason(text)
+    tokens = _md_tokens(head)
+    kind = None
+    if tokens and not tokens[0][1] and tokens[0][0].endswith(":"):
+        kind = tokens.pop(0)[0][:-1].lower()
+        if kind == "reasoning":
+            raise ValueError("the reasoning is the text above '## Evidence', not "
+                             "an item: move this file's text there")
+        if kind not in EVIDENCE_KINDS:
+            raise ValueError(f"unknown kind {kind!r}: one of "
+                             + ", ".join(sorted(EVIDENCE_KINDS - {'reasoning'})))
+    if not tokens:
+        raise ValueError("no file: write '- output: runs/run.log — caption'")
+    path = tokens.pop(0)[0]
+    local_only = False
+    for value, quote in tokens:
+        if not quote and value.lower() in ("local-only", "local_only", "(local-only)"):
+            local_only = True
+        else:
+            raise ValueError(
+                f"unexpected {value!r} after the file. An item is '- kind: path "
+                "— caption' (add 'local-only' after the path for a file kept "
+                "only here); put a path with spaces in `backticks`"
+            )
+    if kind is None:
+        kind = KIND_BY_SUFFIX.get(_md_suffix(Path(path).name))
+        if kind is None:
+            raise ValueError(
+                f"cannot tell the kind of {path} from its name: write it as "
+                f"'- data: {path}' (or parameters, figure, output, code, "
+                "derivation, protocol)"
+            )
+    return {"line": n, "kind": kind, "path": path, "local_only": local_only,
+            "caption": caption or None}
+
+
+def _md_cite(text: str, n: int) -> dict[str, Any]:
+    """'relation target [at "passage"] [review sources/….json | standard] [— reason]'."""
+    head, reason = _md_split_reason(text)
+    tokens = _md_tokens(head)
+    form = ("an item is '- uses <target> — reason'; the target is a claim id, "
+            "doi:…, arxiv:…, a URL, library:<id> or commit")
+    if len(tokens) < 2:
+        raise ValueError(form)
+    relation = tokens[0][0].lower()
+    if relation not in RELATIONS:
+        raise ValueError(f"{tokens[0][0]!r} is not a relation: one of "
+                         + ", ".join(sorted(RELATIONS)) + f"; {form}")
+    target = tokens[1][0]
+    cite: dict[str, Any] = {"line": n, "relation": relation, "reason": reason or None}
+    if target == "commit":
+        cite["commit"] = True
+    elif ID_FORM.match(target):
+        cite["local"] = target
+    elif target.lower().startswith("library:"):
+        if not LIBRARY_ID.match(target[8:]):
+            raise ValueError(f"{target}: a Library claim id is 36 characters, "
+                             "library:xxxxxxxx-xxxx-…")
+        cite["claim_id"] = target[8:]
+    elif EXTERNAL_FORM.match(target):
+        cite["external"] = target
+    else:
+        raise ValueError(f"{target!r} is not a target: {form}")
+    rest = tokens[2:]
+    while rest:
+        word, quote = rest.pop(0)
+        if not quote and word == "at":
+            if not rest or rest[0][1] not in ('"', "“"):
+                raise ValueError('after at comes the passage in double quotes: '
+                                 'at "Eq. (12)"')
+            cite["locator"] = rest.pop(0)[0]
+        elif not quote and word == "review":
+            if not rest:
+                raise ValueError("after review comes the path of the source "
+                                 "review: review sources/<paper>/<review>.json")
+            cite["review"] = rest.pop(0)[0]
+        elif not quote and word == "standard":
+            cite["standard"] = True
+        else:
+            raise ValueError(
+                f"unexpected {word!r}. After the target come, if any: "
+                'at "<passage>", review sources/….json or standard; then '
+                "' — ' and the reason"
+            )
+    if ("locator" in cite or "review" in cite or "standard" in cite) and "external" not in cite:
+        raise ValueError("a passage, review or standard belongs to a paper "
+                         "(doi:…, arxiv:… or a URL)")
+    return cite
+
+
+def web_url_of_remote(url: str) -> str | None:
+    """The https address of a git remote, without credentials or '.git';
+    None for a local path."""
+    url = url.strip()
+    m = re.match(r"^[\w.-]+@([\w.-]+):(?!/)(.+)$", url)  # git@host:group/repo
+    if m:
+        host, path = m.group(1), m.group(2)
+    else:
+        m = re.match(r"^(?:ssh|git|https?)://(?:[^@/]*@)?([^/:]+)(?::\d+)?/(.+)$", url)
+        if not m:
+            return None
+        host, path = m.group(1), m.group(2)
+    path = re.sub(r"\.git/?$", "", path).strip("/")
+    return f"https://{host}/{path}"
+
+
+def commit_url(repository: str, commit: str) -> str:
+    """GitLab: /-/commit/, Bitbucket: /commits/, others (GitHub, Gitea): /commit/."""
+    host = repository.split("/")[2].lower() if "://" in repository else ""
+    if "gitlab" in host:
+        return f"{repository}/-/commit/{commit}"
+    if "bitbucket" in host:
+        return f"{repository}/commits/{commit}"
+    return f"{repository}/commit/{commit}"
+
+
+def claim_md_template(
+    title: str, claim_type: str | None, commit: str | None, cite_commit: bool
+) -> str:
+    head = [
+        "---",
+        f"title: {title}",
+        "statement: ",
+        f"type: {claim_type or 'result'}",
+        "holds_when: ",
+        "conventions: ",
+        "command: ",
+    ]
+    if commit:
+        head.append(f"commit: {commit}")
+    head += ["contributors: ", "---", ""]
+    body = [
+        "<!-- Why the statement follows from the evidence: what was computed,",
+        "compared or measured, and why it is believed. Cite as [1], [2] in the",
+        "order of Cites. Lines inside these comments are dropped. -->",
+        "",
+        "## Evidence",
+        "<!-- - output: runs/…/run.log — Run log, verbatim. -->",
+        "",
+        "## Cites",
+    ]
+    if cite_commit:
+        body.append("- uses commit — The code that produced every number here.")
+    return "\n".join(head + body) + "\n"
+
+
+def _md_rel(path: Path, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def compile_claim_md(ledger: Ledger, cid: str) -> list[str]:
+    """claim.md -> claim.json and evidence/. Returns the errors ('claim.md:12:
+    …'); nothing is written unless there are none. Files are rewritten only
+    when their content changes."""
+    folder = ledger.path(cid)
+    md_file = folder / CLAIM_MD
+    try:
+        md_bytes = md_file.read_bytes()
+        text = md_bytes.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [f"{CLAIM_MD}: cannot be read as UTF-8 text ({exc})"]
+    parsed, problems = parse_claim_md(text)
+    # Parse errors and the errors of what parsed (a file not found, a claim
+    # not in the ledger) are reported together, in the order of the lines.
+    found: list[tuple[int, str]] = list(problems)
+
+    def done() -> list[str]:
+        return [f"{CLAIM_MD}:{n}: {msg}" for n, msg in sorted(found, key=lambda e: e[0])]
+
+    if any(n == 1 for n, _ in problems) and not parsed["header"]:
+        return done()
+
+    def err(n: int, msg: str) -> None:
+        found.append((n, msg))
+
+    header = {f: v for f, (v, _) in parsed["header"].items()}
+    line_of = {f: n for f, (_, n) in parsed["header"].items()}
+    repo_root = ledger.root.parent.resolve()
+    previous: dict[str, Any] = {}
+    if (folder / "claim.json").is_file():
+        try:
+            previous = json.loads((folder / "claim.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            previous = {}
+    if previous.get("status") == "sealed":
+        return [f"{CLAIM_MD}: the claim is sealed and is not compiled again"]
+    if header.get("claim_type") not in CLAIM_TYPES:
+        header["claim_type"] = None  # reported above
+
+    # The code: the commit and where it can be seen.
+    code_repo = repo_root
+    if header.get("repository_path"):
+        code_repo = (repo_root / header["repository_path"]).resolve()
+        if not code_repo.is_dir():
+            err(line_of["repository_path"], f"{header['repository_path']} is not a "
+                "folder (a path from the repository root)")
+    commit_given = header.get("commit") or ""
+    uncommitted = commit_given.lower() == "uncommitted"
+    commit = None
+    if commit_given and not uncommitted:
+        if FULL_HASH.match(commit_given):
+            commit = commit_given
+        else:
+            commit = git("rev-parse", "--verify", "--quiet", f"{commit_given}^{{commit}}",
+                         cwd=code_repo)
+            if not commit:
+                err(line_of["commit"], f"{commit_given!r} is no commit in {code_repo}: "
+                    "give the full hash, or 'uncommitted' if the code could not be committed")
+    elif not uncommitted:
+        commit = git("rev-parse", "--verify", "--quiet", "HEAD^{commit}", cwd=code_repo)
+    repository = header.get("repository") or None
+    if not repository:
+        remote = git("remote", "get-url", "origin", cwd=code_repo)
+        repository = web_url_of_remote(remote) if remote else None
+
+    # Evidence: the reasoning, then each file, copied under its numbered name.
+    if len(parsed["evidence"]) + 1 > MAX["evidence"]:
+        err(parsed["evidence"][-1]["line"], f"{len(parsed['evidence']) + 1} evidence "
+            f"items with the reasoning; at most {MAX['evidence']}")
+    evidence = [{"kind": "reasoning", "file": "evidence/01-reasoning.md", "format": "markdown"}]
+    files: dict[str, bytes] = {"evidence/01-reasoning.md": parsed["reasoning"].encode("utf-8")}
+    sources: dict[str, dict[str, str]] = {}
+    if len(parsed["reasoning"]) > MAX["content"]:
+        err(parsed["reasoning_line"], f"the reasoning is {len(parsed['reasoning'])} "
+            f"characters; the Library takes {MAX['content']} per item: move the "
+            "material into evidence files")
+    for number, item in enumerate(parsed["evidence"], start=2):
+        n, given = item["line"], item["path"]
+        # From the project root (where claims/ is), the git toplevel (for a
+        # project in a subfolder, an agent started at the top writes
+        # sbd/runs/x.log), or the claim's folder.
+        bases = [repo_root]
+        top = git("rev-parse", "--show-toplevel", cwd=repo_root)
+        if top and Path(top).resolve() != repo_root:
+            bases.append(Path(top).resolve())
+        bases.append(folder)
+        candidates = [Path(given)] if Path(given).is_absolute() else [
+            b / given for b in bases]
+        hits = list(dict.fromkeys(p.resolve() for p in candidates if p.is_file()))
+        if not hits:
+            err(n, f"{given} does not exist, from the project root ({repo_root.name}/), "
+                "the repository root or the claim's folder")
+            continue
+        if len(hits) > 1:
+            err(n, f"{given} names more than one file (from the project root, the "
+                "repository root, the claim's folder): write the path from the "
+                "project root")
+            continue
+        source = hits[0]
+        if (folder / "evidence").resolve() in source.parents:
+            err(n, f"{given} is inside evidence/, which claims.py writes: put the "
+                "file elsewhere (the claim's folder will do) and list it from there")
+            continue
+        data = source.read_bytes()
+        try:
+            content = data.decode("utf-8")
+        except UnicodeDecodeError:
+            err(n, f"{given} is not UTF-8 text: evidence files are text (a figure "
+                "as a Vega-Lite spec with its data inline)")
+            continue
+        if not content.strip():
+            err(n, f"{given} is empty")
+            continue
+        if len(content) > MAX["content"] and not item["local_only"]:
+            err(n, f"{given} is {len(content)} characters; the Library takes "
+                f"{MAX['content']} per item. Mark it local-only (write 'local-only' "
+                "after the path) and add an excerpt — the lines the statement uses — "
+                "as its own item")
+            continue
+        if item["caption"] and len(item["caption"]) > MAX["caption"]:
+            err(n, f"the caption is {len(item['caption'])} characters; at most "
+                f"{MAX['caption']}")
+        suffix = _md_suffix(source.name)
+        if item["kind"] == "output" or not suffix:
+            ext = ".txt" if item["kind"] != "derivation" else ".tex"
+        else:
+            ext = suffix
+        name = f"evidence/{number:02d}-{item['kind']}{ext}"
+        entry: dict[str, Any] = {"kind": item["kind"], "file": name}
+        fmt = FORMAT_BY_SUFFIX.get(suffix)
+        if item["kind"] == "code":
+            language = CODE_LANGUAGES.get(Path(source.name.lower()).suffix)
+            if suffix.endswith(".lock"):
+                language = "toml"
+            if language:
+                entry["language"] = language
+        elif fmt and item["kind"] != "output":
+            entry["format"] = fmt
+        if item["caption"]:
+            entry["caption"] = item["caption"]
+        if item["local_only"]:
+            entry["local_only"] = True
+        evidence.append(entry)
+        files[name] = data
+        sources[name] = {"from": _md_rel(source, repo_root), "sha256": sha256(data)}
+
+    # Citations, in the order written: [1], [2], … in the reasoning.
+    citations = []
+    for cite in parsed["cites"]:
+        n = cite["line"]
+        out: dict[str, Any] = {}
+        if cite.get("commit"):
+            if uncommitted:
+                err(n, "'uses commit' but the header says commit: uncommitted: drop "
+                    "one of the two, and put the code in an evidence item")
+                continue
+            if not commit:
+                err(n, f"no commit to cite: {code_repo} is not a git repository with "
+                    "a commit. Commit the code, or say 'commit: uncommitted' in the "
+                    "header and drop this line")
+                continue
+            if not repository:
+                err(n, "the code's repository has no remote 'origin' with a web "
+                    "address: add 'repository: https://…' to the header, or push it "
+                    "to a remote first")
+                continue
+            out["external"] = commit_url(repository, commit)
+        elif cite.get("local"):
+            other = ledger.path(cite["local"])
+            if cite["local"] == cid:
+                err(n, "a claim cannot cite itself")
+                continue
+            if not ((other / "claim.json").is_file() or (other / CLAIM_MD).is_file()):
+                err(n, f"no claim {cite['local']} in this ledger (claims.py recall "
+                    "finds earlier claims)")
+                continue
+            out["local"] = cite["local"]
+        elif cite.get("claim_id"):
+            out["claim_id"] = cite["claim_id"]
+        else:
+            out["external"] = cite["external"]
+        out["relation"] = cite["relation"]
+        if cite.get("locator"):
+            if len(cite["locator"]) > MAX["locator"]:
+                err(n, f"the passage is longer than {MAX['locator']} characters")
+            out["locator"] = cite["locator"]
+        if cite.get("review"):
+            rel = cite["review"]
+            prefix = ledger.root.name + "/"
+            if rel.startswith(prefix):
+                rel = rel[len(prefix):]
+            if ledger.source_review(rel) is None:
+                err(n, f"no source review {rel} in the ledger (claims.py source list; "
+                    "skill review-source writes one)")
+                continue
+            out["review"] = rel
+        if cite.get("standard"):
+            out["standard"] = True
+        if cite.get("reason"):
+            if len(cite["reason"]) > MAX["reason"]:
+                err(n, f"the reason is longer than {MAX['reason']} characters")
+            out["reason"] = cite["reason"]
+        citations.append(out)
+    if found:
+        return done()
+
+    contributors = header.get("contributors") or []
+    provenance: dict[str, Any] = {}
+    if repository:
+        provenance["repository"] = repository
+    if commit:
+        provenance["commit"] = commit
+    if uncommitted:
+        provenance["uncommitted"] = True
+    if header.get("command"):
+        provenance["command"] = header["command"]
+    if contributors:
+        provenance["agent"] = contributors[0]
+    if header.get("repository_path"):
+        provenance["repository_path"] = header["repository_path"]
+
+    claim = {
+        "id": cid,
+        "status": "draft",
+        "title": header.get("title") or "",
+        "statement": header.get("statement") or "",
+        "claim_type": header.get("claim_type") or None,
+        "holds_when": header.get("holds_when") or "",
+        "evidence": evidence,
+        "citations": citations,
+        "conventions": header.get("conventions") or [],
+        "contributors": contributors,
+        "anchors": header.get("anchors") or [],
+        "provenance": provenance,
+        "library": previous.get("library"),
+        "compiled_from": {"claim.md": sha256(md_bytes), "evidence": sources},
+    }
+
+    # Write: evidence first, then claim.json; drop files an earlier compile
+    # wrote that are no longer listed.
+    (folder / "evidence").mkdir(parents=True, exist_ok=True)
+    for name, data in files.items():
+        target = folder / name
+        if not target.is_file() or target.read_bytes() != data:
+            target.write_bytes(data)
+    owned = set((previous.get("compiled_from") or {}).get("evidence") or {})
+    if previous.get("compiled_from"):
+        owned |= {"evidence/01-reasoning.md"}
+    for name in owned - set(files):
+        stale = folder / name
+        if stale.is_file() and (folder / "evidence").resolve() in stale.resolve().parents:
+            stale.unlink()
+    body = json.dumps(claim, indent=2, ensure_ascii=False) + "\n"
+    target = folder / "claim.json"
+    if not target.is_file() or target.read_text(encoding="utf-8") != body:
+        target.write_text(body, encoding="utf-8")
+    return []
+
+
+def compile_drafts(ledger: Ledger, only: list[str] | None = None) -> dict[str, list[str]]:
+    """Compile every draft that has a claim.md (or the ones named). Returns
+    the errors of each that failed."""
+    if only is not None:
+        ids = [c for c in only if not c.startswith("sources/")]
+    elif ledger.root.is_dir():
+        ids = sorted(p.name for p in ledger.root.iterdir() if (p / CLAIM_MD).is_file())
+    else:
+        ids = []
+    failed = {}
+    for cid in ids:
+        folder = ledger.path(cid)
+        if not (folder / CLAIM_MD).is_file():
+            continue
+        try:
+            status = json.loads((folder / "claim.json").read_text(encoding="utf-8")).get("status")
+        except (OSError, json.JSONDecodeError):
+            status = None
+        if status == "sealed":
+            continue
+        errors = compile_claim_md(ledger, cid)
+        if errors:
+            failed[cid] = errors
+    return failed
+
+
+def check_compiled_from(ledger: Ledger, claim: dict[str, Any], r: Report) -> None:
+    """A sealed claim written as claim.md: the claim.md must be the one it was
+    compiled from, and the files its evidence was copied from are compared
+    with the copies — which stay the record."""
+    record = claim.get("compiled_from")
+    if claim.get("status") != "sealed" or not isinstance(record, dict):
+        return
+    cid = claim.get("id", "?")
+    md_file = ledger.path(cid) / CLAIM_MD
+    if record.get("claim.md"):
+        try:
+            now = sha256(md_file.read_bytes())
+        except OSError:
+            now = None
+        if now != record["claim.md"]:
+            r.error(
+                cid,
+                f"{CLAIM_MD} {'changed' if now else 'is gone'} after the claim was "
+                "sealed. claim.json and evidence/ are the record: restore claim.md "
+                "(git checkout), and record what changed as a new claim that cites "
+                "this one ('refutes' or 'extends')",
+            )
+    root = ledger.root.parent
+    for name, src in sorted((record.get("evidence") or {}).items()):
+        path = Path(src.get("from") or "")
+        path = path if path.is_absolute() else root / path
+        try:
+            now = sha256(path.read_bytes())
+        except OSError:
+            continue  # moved or cleaned up: the sealed copy stands
+        if now != src.get("sha256"):
+            r.warn(
+                cid,
+                f"{src.get('from')} changed since it was sealed as {name}; the sealed "
+                "copy stays the evidence. If the new content changes the finding, "
+                "record a new claim",
+            )
 
 
 # --- commands ---------------------------------------------------------------------
@@ -1094,6 +1905,23 @@ def cmd_new(ledger: Ledger, a: argparse.Namespace) -> int:
         cid, n = f"{base}-{n}", n + 1
     folder = ledger.path(cid)
     (folder / "evidence").mkdir(parents=True)
+    if not a.json:
+        # The short form: claim.md, compiled at once so every command sees
+        # the draft. The commit is the one checked out now — the code the
+        # run used, committed before the claim is started.
+        repo = ledger.root.parent
+        head = git("rev-parse", "--verify", "--quiet", "HEAD^{commit}", cwd=repo)
+        origin = git("remote", "get-url", "origin", cwd=repo)
+        cite_commit = bool(head and origin and web_url_of_remote(origin))
+        (folder / CLAIM_MD).write_text(
+            claim_md_template(a.title, a.type, head, cite_commit), encoding="utf-8"
+        )
+        errors = compile_claim_md(ledger, cid)
+        if errors:
+            raise LedgerError("; ".join(errors))
+        print(cid)
+        print(folder / CLAIM_MD)
+        return 0
     claim = {
         "id": cid,
         "status": "draft",
@@ -1127,7 +1955,13 @@ def print_report(r: Report) -> None:
 
 
 def cmd_check(ledger: Ledger, a: argparse.Namespace) -> int:
-    if not ledger.ids() and not ledger.source_reviews() and not ledger.conventions_file.is_file():
+    has_md = ledger.root.is_dir() and any(ledger.root.glob(f"*/{CLAIM_MD}"))
+    if (
+        not ledger.ids()
+        and not has_md
+        and not ledger.source_reviews()
+        and not ledger.conventions_file.is_file()
+    ):
         print(f"no claims in {ledger.root}")
         return 0
     r = check(ledger, a.ids or None)
@@ -1136,11 +1970,24 @@ def cmd_check(ledger: Ledger, a: argparse.Namespace) -> int:
 
 
 def cmd_seal(ledger: Ledger, a: argparse.Namespace) -> int:
+    failed = compile_drafts(ledger, [a.id]).get(a.id)
+    if failed:
+        for text in failed:
+            print(f"ERROR   {a.id}: {text}")
+        print(f"not sealed: fix {CLAIM_MD} in {a.id} first")
+        return 1
     claim = ledger.load(a.id)
     if claim.get("status") == "sealed":
         raise LedgerError(f"{a.id} is already sealed")
+    content = seal_of(ledger, claim)
+    rounds = load_checks(ledger, a.id)
+    if not a.without_check:
+        why = unsealable(rounds, content)
+        if why:
+            print(f"not sealed: {a.id} {why}")
+            return 1
     claim["status"] = "sealed"  # checked as it will be once sealed
-    claim["seal"] = {"sha256": seal_of(ledger, claim)}
+    claim["seal"] = {"sha256": content}
     # Checked in memory, as it will be once sealed; disk still has the draft.
     r = Report()
     check_claim(ledger, claim, {**ledger.all(), a.id: claim}, r)
@@ -1150,6 +1997,9 @@ def cmd_seal(ledger: Ledger, a: argparse.Namespace) -> int:
         print(f"not sealed: fix the errors in {a.id} first")
         return 1
     claim["seal"]["at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    # The round whose pass it was sealed on (its record: checks.json), or
+    # false when the researcher sealed it without one.
+    claim["seal"]["checked"] = False if a.without_check else rounds[-1]["round"]
     ledger.save(claim)
     print_report(r)
     print(f"sealed {a.id}")
@@ -1197,6 +2047,28 @@ def cmd_trace(ledger: Ledger, a: argparse.Namespace) -> int:
     print(f"{a.id}  {label(claims[a.id])}")
     seen.add(a.id)
     walk(a.id, "")
+    return 0
+
+
+def cmd_init(ledger: Ledger, a: argparse.Namespace) -> int:
+    """Start a ledger in a project's folder: for a repository that holds
+    several projects, where the first claim would otherwise land in the
+    ledger at the top of the repository."""
+    folder = Path(a.folder or ".").resolve()
+    if not folder.is_dir():
+        raise LedgerError(f"{folder} is not a folder")
+    here = Ledger(folder / "claims")
+    if (folder / "claims").is_dir() and (folder / "claims" / "README.md").is_file():
+        print(f"{here.root} is already a ledger")
+        return 0
+    if ledger.root.resolve() != here.root and ledger.root.is_dir():
+        print(f"note: the ledger found until now was {ledger.root}; from inside "
+              f"{folder} it is this one")
+    here.root.mkdir(parents=True, exist_ok=True)
+    with contextlib.redirect_stdout(io.StringIO()):
+        cmd_index(here, a)
+    print(f"ledger started at {here.root}; claims.py and the hooks find it from "
+          f"anywhere inside {folder}")
     return 0
 
 
@@ -1332,7 +2204,9 @@ def cmd_order(ledger: Ledger, a: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_payload(ledger: Ledger, a: argparse.Namespace) -> int:
+def claim_payload(ledger: Ledger, a: argparse.Namespace) -> dict[str, Any]:
+    """The `publish_claim` arguments for claim `a.id`, placed by `a.space_id`
+    or `a.public` (private otherwise). Shared by `payload` and `publish`."""
     claims = ledger.all()
     claim = claims.get(a.id)
     if claim is None:
@@ -1427,7 +2301,11 @@ def cmd_payload(ledger: Ledger, a: argparse.Namespace) -> int:
         payload["space_id"] = a.space_id
     elif not a.public:
         payload["private"] = True
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return payload
+
+
+def cmd_payload(ledger: Ledger, a: argparse.Namespace) -> int:
+    print(json.dumps(claim_payload(ledger, a), indent=2, ensure_ascii=False))
     return 0
 
 
@@ -1584,6 +2462,14 @@ def cmd_source_list(ledger: Ledger, a: argparse.Namespace) -> int:
 
 
 def cmd_source_payload(ledger: Ledger, a: argparse.Namespace) -> int:
+    print(json.dumps(source_payload(ledger, a), indent=2, ensure_ascii=False))
+    return 0
+
+
+def source_payload(ledger: Ledger, a: argparse.Namespace) -> dict[str, Any]:
+    """The `review_source` arguments for the review at `a.path`, placed by
+    `a.space_id` or `a.public` (private otherwise). Shared by `source
+    payload` and `publish`."""
     review = ledger.source_review(a.path)
     if review is None:
         raise LedgerError(f"no source review {a.path} in {ledger.root}")
@@ -1637,8 +2523,7 @@ def cmd_source_payload(ledger: Ledger, a: argparse.Namespace) -> int:
         payload["space_id"] = a.space_id
     elif not a.public:
         payload["private"] = True
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 0
+    return payload
 
 
 def cmd_source_published(ledger: Ledger, a: argparse.Namespace) -> int:
@@ -1861,7 +2746,9 @@ def cmd_recall(ledger: Ledger, a: argparse.Namespace) -> int:
 
 
 def cmd_pending(ledger: Ledger, a: argparse.Namespace) -> int:
-    """Drafts not yet sealed, oldest first, each with what check says."""
+    """Drafts not yet sealed, oldest first, each with what check says and
+    where its independent check stands."""
+    failed = compile_drafts(ledger)
     claims = ledger.all()
     drafts = sorted(cid for cid, c in claims.items() if c.get("status") == "draft")
     if not drafts:
@@ -1869,9 +2756,171 @@ def cmd_pending(ledger: Ledger, a: argparse.Namespace) -> int:
         return 0
     for cid in drafts:
         r = Report()
-        check_claim(ledger, claims[cid], claims, r)
+        if cid in failed:
+            for text in failed[cid]:
+                r.error(cid, text)
+        else:
+            check_claim(ledger, claims[cid], claims, r)
         state = f"{len(r.errors)} error(s)" if r.errors else "passes check"
         print(f"{cid}  [{state}, {len(r.warnings)} warning(s)]  {claims[cid].get('title', '')}")
+        try:
+            content = None if cid in failed else seal_of(ledger, claims[cid])
+        except OSError:
+            content = None
+        try:
+            rounds = load_checks(ledger, cid)
+        except LedgerError as exc:
+            print(f"    {exc}")
+            continue
+        _, line = check_state(rounds, content)
+        print(f"    {line}")
+        if rounds and rounds[-1].get("verdict") == "issues" and line.startswith("held"):
+            for issue in rounds[-1].get("issues") or []:
+                print(f"      - {format_issue(issue)}")
+    return 0
+
+
+# --- the independent check of a draft: at most two rounds -------------------------
+#
+# A draft is checked by an agent that did not write it (references/
+# claim-checker.md). Each round is recorded in claims/<id>/checks.json with
+# the hash of the content it judged — the hash the claim's seal will have —
+# so a change after a pass is seen. Two rounds at most: issues in round 2
+# hold the draft for the researcher. checks.json is outside the seal: it is
+# about the content, which the seal covers; the seal records which round it
+# was sealed on.
+
+CHECKS_FILE = "checks.json"
+MAX_ROUNDS = 2
+
+
+def checks_file(ledger: Ledger, cid: str) -> Path:
+    return ledger.path(cid) / CHECKS_FILE
+
+
+def load_checks(ledger: Ledger, cid: str) -> list[dict[str, Any]]:
+    file = checks_file(ledger, cid)
+    if not file.is_file():
+        return []
+    try:
+        return json.loads(file.read_text(encoding="utf-8")).get("rounds") or []
+    except (json.JSONDecodeError, AttributeError):
+        raise LedgerError(f"{cid}/{CHECKS_FILE} is not valid JSON")
+
+
+def worst(issues: list[dict[str, Any]]) -> str | None:
+    order = ["minor", "moderate", "major"]
+    return max((i["severity"] for i in issues), key=order.index, default=None)
+
+
+def format_issue(issue: dict[str, Any]) -> str:
+    where = f" ({issue['file']})" if issue.get("file") else ""
+    quote = f' — "{issue["quote"]}"' if issue.get("quote") else ""
+    return f"{issue.get('severity')}: {issue.get('text')}{quote}{where}"
+
+
+def check_state(rounds: list[dict[str, Any]], content: str | None) -> tuple[str, str]:
+    """Where a draft's check stands: ('written' | 'issues' | 'held' |
+    'passed', a line saying so). `content` is the draft's hash now (None if
+    it does not compile)."""
+    if not rounds:
+        return "written", "written: not checked yet"
+    last = rounds[-1]
+    n = last.get("round", len(rounds))
+    same = content is not None and last.get("content") == content
+    if last.get("verdict") == "pass":
+        if same:
+            return "passed", f"passed in round {n}: ready to seal"
+        if n < MAX_ROUNDS:
+            return "issues", f"changed after its pass in round {n}: check it again (round {n + 1})"
+        return "held", f"held: changed after its pass in round {n}; the researcher decides"
+    issues = last.get("issues") or []
+    count = f"{len(issues)} issue(s), worst {worst(issues)}"
+    if n >= MAX_ROUNDS:
+        return "held", f"held: round {n} found {count}; the researcher decides"
+    if same:
+        return "issues", f"issues in round {n} ({count}): waiting for the author's fix"
+    return "issues", f"issues in round {n} ({count}), changed since: ready for round {n + 1}"
+
+
+def unsealable(rounds: list[dict[str, Any]], content: str) -> str | None:
+    """Why a draft cannot be sealed yet, or None when its current content
+    passed a check."""
+    state, line = check_state(rounds, content)
+    if state == "passed":
+        return None
+    if state == "written":
+        return ("has not been checked: start the claim checker on it. Only the "
+                "researcher seals a claim unchecked (--without-check)")
+    if state == "held":
+        return (f"is held — {line.split(': ', 1)[1]} (claims.py pending). Only the "
+                "researcher seals it unchecked (--without-check)")
+    return f"has no passing check of its current content — {line}"
+
+
+def draft_content(ledger: Ledger, cid: str) -> tuple[dict[str, Any], str]:
+    """A draft, compiled from claim.md if it has one, and the hash of its
+    content now — claim.json's core, its evidence, and what it relies on:
+    the hash its seal will have."""
+    failed = compile_drafts(ledger, [cid]).get(cid)
+    if failed:
+        raise LedgerError(f"{cid}/{CLAIM_MD} does not compile: {failed[0]} (claims.py check {cid})")
+    claim = ledger.load(cid)
+    if claim.get("status") == "sealed":
+        raise LedgerError(f"{cid} is sealed: a sealed claim is audited (claims.py audit), not checked")
+    try:
+        return claim, seal_of(ledger, claim)
+    except OSError as exc:
+        raise LedgerError(f"{cid}: an evidence file cannot be read ({exc}); claims.py check {cid}")
+
+
+def cmd_checked(ledger: Ledger, a: argparse.Namespace) -> int:
+    claim, content = draft_content(ledger, a.id)
+    rounds = load_checks(ledger, a.id)
+    if len(rounds) >= MAX_ROUNDS:
+        raise LedgerError(
+            f"{a.id} was checked twice already; there is no third round. "
+            "What is still open is for the researcher (claims.py pending)"
+        )
+    if rounds and rounds[-1].get("verdict") == "pass" and rounds[-1].get("content") == content:
+        raise LedgerError(
+            f"{a.id} passed round {rounds[-1].get('round')} as it is now: seal it (claims.py seal {a.id})"
+        )
+    if a.passed:
+        r = Report()
+        check_claim(ledger, claim, ledger.all(), r)
+        if r.errors:
+            print_report(r)
+            raise LedgerError(f"{a.id} has check errors, so it cannot pass: record them as issues")
+        issues: list[dict[str, Any]] = []
+    else:
+        try:
+            issues = check_findings(json.loads(Path(a.issues).read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise LedgerError(f"cannot read the issues from {a.issues}: {exc}")
+        if not issues:
+            raise LedgerError("no issues in the file: record a pass with --pass")
+    n = len(rounds) + 1
+    rounds.append({
+        "round": n,
+        "verdict": "issues" if issues else "pass",
+        "issues": issues,
+        "agent": a.agent,
+        "at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "content": content,
+    })
+    checks_file(ledger, a.id).write_text(
+        json.dumps({"claim": a.id, "rounds": rounds}, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    if not issues:
+        print(f"{a.id}: passed in round {n}; seal it: claims.py seal {a.id}")
+    elif n < MAX_ROUNDS:
+        print(f"{a.id}: {len(issues)} issue(s) in round {n}, worst {worst(issues)}; "
+              f"the author fixes or answers them, then round {n + 1}")
+    else:
+        print(f"{a.id}: {len(issues)} issue(s) in round {n}, worst {worst(issues)}; "
+              "held for the researcher (claims.py pending)")
     return 0
 
 
@@ -2062,11 +3111,20 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         prog="claims.py", description="Record, check and publish findings as claims."
     )
-    p.add_argument("--root", help="the ledger folder (default: claims/ at the git root)")
+    p.add_argument("--root", help="the ledger folder (default: the nearest project's "
+                   "claims/, else claims/ at the git root)")
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("new", help="start a draft claim; prints its id and folder")
+    s = sub.add_parser(
+        "new", help="start a draft claim as claim.md; prints its id and the file"
+    )
     s.add_argument("title")
+    s.add_argument(
+        "--json",
+        action="store_true",
+        help="start it as claim.json with an empty evidence/01-reasoning.md "
+        "instead (the long form)",
+    )
     s.add_argument("--type", choices=sorted(CLAIM_TYPES))
     s.add_argument("--slug", help="a few words for the id (default: from the title)")
     s.add_argument(
@@ -2080,13 +3138,42 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("ids", nargs="*")
     s.set_defaults(run=cmd_check)
 
-    s = sub.add_parser("seal", help="freeze a draft: no change after this")
+    s = sub.add_parser(
+        "seal",
+        help="freeze a draft once its current content passed a check: no change after this",
+        description="Freeze a draft: no change after this. Needs a passing check "
+        "(claims.py checked) of the draft as it is now.",
+    )
     s.add_argument("id")
+    s.add_argument("--without-check", action="store_true",
+                   help="the researcher's decision: seal it without a passing check")
     s.set_defaults(run=cmd_seal)
+
+    s = sub.add_parser(
+        "checked",
+        help="record one round of the independent check of a draft (two at most)",
+        description="Record one round of the independent check of a draft in "
+        "<id>/checks.json, with the hash of the content it judged. Issues in "
+        "round 1 go back to the author; issues in round 2 hold the draft for "
+        "the researcher. There is no third round.",
+    )
+    s.add_argument("id")
+    group = s.add_mutually_exclusive_group(required=True)
+    group.add_argument("--pass", dest="passed", action="store_true",
+                       help="no issues: it can be sealed")
+    group.add_argument("--issues", help="a JSON list of {severity, text, quote, file}")
+    s.add_argument("--agent", help="who checked it: the agent and its model id")
+    s.set_defaults(run=cmd_checked)
 
     s = sub.add_parser("trace", help="everything a claim rests on, as a tree")
     s.add_argument("id")
     s.set_defaults(run=cmd_trace)
+
+    s = sub.add_parser(
+        "init", help="start a ledger (claims/) in this folder, or the one given: "
+        "one project of a repository that holds several")
+    s.add_argument("folder", nargs="?", help="the project's folder (default: here)")
+    s.set_defaults(run=cmd_init)
 
     s = sub.add_parser("index", help="write claims/README.md: the list and the graph")
     s.set_defaults(run=cmd_index)
@@ -2108,7 +3195,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--visibility", default="private", choices=["private", "public"])
     s.set_defaults(run=cmd_published)
 
-    s = sub.add_parser("pending", help="draft claims not yet sealed, with their check")
+    s = sub.add_parser("pending", help="draft claims not yet sealed: their check, and where "
+                       "the independent check stands")
     s.set_defaults(run=cmd_pending)
 
     s = sub.add_parser("recall", help="what the ledger already says about something")
@@ -2177,6 +3265,10 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("library_id")
     s.add_argument("--visibility", default="private", choices=["private", "public"])
     s.set_defaults(run=cmd_source_published)
+
+    import library  # login, logout, where, publish: the Library over HTTP
+
+    library.add_commands(sub, sys.modules[__name__])
 
     a = p.parse_args(argv)
     ledger = Ledger(ledger_root(a.root))

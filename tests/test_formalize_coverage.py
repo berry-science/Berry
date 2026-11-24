@@ -24,7 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "skills" / "formalize-derivation" / "scripts"
-sys.path.insert(0, str(ROOT / "skills" / "record-claim" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "claims" / "scripts"))
 sys.path.insert(0, str(SCRIPTS))
 
 import claims  # noqa: E402
@@ -265,13 +265,14 @@ class WithoutSympyTest(unittest.TestCase):
             led.close()
 
     def test_the_hook_does_nothing_without_the_skill(self) -> None:
-        # record-claim installed on its own: the same claims.py, no
+        # the claims skill installed on its own: the same claims.py, no
         # formalize-derivation beside it.
         led = Ledger(script=SCRIPT.replace("dc.finish()", 'print("PASS")\ndc.finish()'))
         with tempfile.TemporaryDirectory() as tmp:
-            alone = Path(tmp) / "skills" / "record-claim" / "scripts"
+            alone = Path(tmp) / "skills" / "claims" / "scripts"
             alone.mkdir(parents=True)
-            shutil.copy(ROOT / "skills" / "record-claim" / "scripts" / "claims.py", alone / "claims.py")
+            for name in ("claims.py", "library.py"):
+                shutil.copy(ROOT / "skills" / "claims" / "scripts" / name, alone / name)
             proc = subprocess.run(
                 [sys.executable, str(alone / "claims.py"), "--root", str(led.root), "check", CID],
                 capture_output=True, text=True,
@@ -287,12 +288,12 @@ class WithoutSympyTest(unittest.TestCase):
             original = derivcover.check_claim
             with tempfile.TemporaryDirectory() as tmp:
                 skills = Path(tmp) / "skills"
-                shutil.copytree(ROOT / "skills" / "record-claim", skills / "record-claim")
+                shutil.copytree(ROOT / "skills" / "claims", skills / "claims")
                 broken = skills / "formalize-derivation" / "scripts"
                 broken.mkdir(parents=True)
                 (broken / "derivcover.py").write_text("def check_claim(folder, claim):\n    raise RuntimeError('boom')\n")
                 proc = subprocess.run(
-                    [sys.executable, str(skills / "record-claim" / "scripts" / "claims.py"),
+                    [sys.executable, str(skills / "claims" / "scripts" / "claims.py"),
                      "--root", str(led.root), "check", CID],
                     capture_output=True, text=True,
                 )

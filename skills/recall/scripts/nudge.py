@@ -9,8 +9,10 @@ against the message. The agent itself recognizes the same situations from
 the recall skill's description, worded any way; this is the safety net for
 the common phrasings, and it costs nothing when nothing matches.
 
-Runs in a research repository with a claim ledger (claims/ at the git root,
-or BERRY_WATCH=1). Never blocks. Standard library only; exit 0 always.
+Runs in a research project with a claim ledger (claims/ in the nearest
+folder up from the session's directory that holds one, else at the git
+root: berry_project.py), or with BERRY_WATCH=1. Never blocks. Standard
+library only; exit 0 always.
 """
 
 from __future__ import annotations
@@ -18,10 +20,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "claims" / "scripts"))
+import berry_project  # noqa: E402
 
 # Each: (what the message does, the phrases that show it). Lowercase; \b
 # where a word must start or end. Broad on purpose: a reminder too many
@@ -91,17 +95,6 @@ def note(found: list[tuple[str, str]]) -> str:
     )
 
 
-def git_top(cwd: Path) -> Path | None:
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=cwd, capture_output=True, text=True, timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return Path(out.stdout.strip()) if out.returncode == 0 else None
-
-
 def main() -> int:
     try:
         event: dict[str, Any] = json.load(sys.stdin)
@@ -110,11 +103,12 @@ def main() -> int:
     prompt = event.get("prompt") or event.get("user_prompt") or ""
     if not isinstance(prompt, str) or not prompt.strip():
         return 0
-    cwd = Path(event.get("cwd") or os.getcwd())
-    root = git_top(cwd) or cwd
-    if not (root / "claims").is_dir() and os.environ.get("BERRY_WATCH") != "1":
-        return 0
     found = matches(prompt)
+    if not found:
+        return 0
+    project = berry_project.find_project(event.get("cwd") or None)
+    if not project.has_ledger and os.environ.get("BERRY_WATCH") != "1":
+        return 0
     if not found:
         return 0
     print(json.dumps({

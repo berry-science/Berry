@@ -1,6 +1,6 @@
 ---
 name: labbook-writer
-description: Writes the labbook step for one or more newly sealed claims — in the researcher's voice, from labbook/voice.md — updates "where things stand" and the open points, and rebuilds the PDF. In the background. Use after a claim is sealed, or when the labbook hook reports sealed claims missing from the labbook.
+description: Writes the labbook step for one or more claims just sealed and published — in the researcher's voice, from labbook/voice.md — updates where things stand and the open points, rebuilds the PDF, and adds the step to the project's Library labbook when it has one. In the background. Give it the claim id(s).
 background: true
 skills:
   - labbook
